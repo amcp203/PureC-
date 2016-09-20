@@ -53,6 +53,8 @@ void write_eps(double * segs, int n, int dim, char * filename, int xsize, int ys
 	fprintf(eps, "%%%%EOF\n");
 }
 
+
+
 //LSD
 double* DoLSD(cv::Mat image, int& numLines)
 {
@@ -202,9 +204,9 @@ dlib::matrix<double, 0, 1> minimize_C(double f, cv::Point3f a, cv::Point3f b, cv
 		5,    // number of interpolation points
 		dlib::uniform_matrix<double>(2, 1, -M_PI/2),  // lower bound constraint
 		dlib::uniform_matrix<double>(2, 1, M_PI/2),   // upper bound constraint
-		M_PI / 3,    // initial trust region radius
-		1e-100,  // stopping trust region radius
-		2000    // max number of objective function evaluations
+		M_PI / 10,    // initial trust region radius
+		0.001,  // stopping trust region radius
+		100    // max number of objective function evaluations
 	);
 	return solution;
 }
@@ -276,6 +278,7 @@ dlib::matrix<double, 0, 1> RANSAC(uint maxTrials, double threshold, double f, ve
 		}
 		counter++;
 	}
+	cout << "Number of inliers: " << bestScore << endl;
 	return bestSolution;
 }
 
@@ -491,9 +494,8 @@ int main()
 	double focal_length = 4; //фокальное расстояние в mm
 	double sensor_width = 4.59;
 	double ExtendThreshold = 0.01; //порог отклонения линии (для удлинения)
-	double countInlierThreshold = 0.001; //если скалярное произведение двух линий меньше этого числа, то мы считаем эти линии ортогональными
+	double countInlierThreshold = 0.0001; //если квадрат скалярного произведения двух линий меньше этого числа, то мы считаем эти линии ортогональными
 	uint ResizeIfMoreThan = 2000; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
-	uint maxRansacTrials = 300; //максимальное количество итерация алгоритма RANSAC
 	bool debug = 1;
 	
 	//Открытие изображения
@@ -501,7 +503,7 @@ int main()
 	image = cv::imread("test.jpg", CV_LOAD_IMAGE_COLOR);
 	
 	//Изменение размера
-	int maxRes = max(image.cols, image.rows);
+	uint maxRes = max(image.cols, image.rows);
 	if (maxRes > ResizeIfMoreThan)
 	{
 		float scaleFactor = float(ResizeIfMoreThan) / maxRes;
@@ -520,7 +522,8 @@ int main()
 	//LSD
 	int numLinesDetected;
 	double* LsdLinesArray = DoLSD(image, numLinesDetected);
-	
+	cout << "Number of LSD lines detected: " << numLinesDetected << endl;
+
 	//Копируем точки из массива в вектор с учетом порядка
 	vector<cv::Point3f> LsdLinesVector; //элемент с номером 2*i дает нам точку начала i-ой линии, элемент с номером 2*i + 1 дает нам точку конца i-ой линии
 	for (int i = 0; i < numLinesDetected; i++) 
@@ -547,22 +550,20 @@ int main()
 	vector<cv::Point3f> ExtendedLinesVector; //элемент с индексом 2*i дает нам точку начала i-ой линии, элемент с индексом 2*i + 1 дает нам точку конца i-ой линии
 	vector<PairOfTwoLines> LinePairsVector; //в каждом элементе этого вектора лежит два индекса (линий, которые пересекаются)
 	ExtendLines(numLinesDetected, LsdLinesVector, ExtendedLinesVector, LinePairsVector, ExtendThreshold);
+	cout << "Number of line pairs: " << LinePairsVector.size() << endl;
 	
 	//RANSAC (находим углы альфа и бэта)
+	uint maxRansacTrials = (uint)LinePairsVector.size(); //максимальное количество итерация алгоритма RANSAC
 	dlib::matrix<double, 0, 1> solution = RANSAC(maxRansacTrials, countInlierThreshold, f, LinePairsVector, ExtendedLinesVector);
-	cout << solution << endl;
+	cout << "angle Alpha (in radians): " << solution(0) << endl << "angle Beta (in radians): " << solution(1) << endl;
 
 	//Получаем vanishing points
 	vector<cv::Point3f> VanishingPoints;
 	getVanishingPoints(solution(0), solution(1), f, VanishingPoints);
 
-	//Задаем направление каждой линии
+	//Находим направление каждой линии
 	vector<int> DirectionsOfLines; //элемент с номером i означает направление i-ой линии (0=x, 1=y, 2=z, 3=xy, 4=xz, 5=yz)
 	assignDirections(numLinesDetected, ExtendedLinesVector, VanishingPoints, DirectionsOfLines);
-
-
-
-
 
 
 
