@@ -1,4 +1,4 @@
-﻿Build started 21.09.2016 0:34:12.
+﻿Build started 23.09.2016 2:05:24.
      1>Project "D:\Games\VS\Projects\AugmentedRealityPureC++\Purec++\Purec++\Purec++.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
          D:\Games\VS\VC\bin\x86_amd64\CL.exe /c /ID:\Games\VS\Projects\AugmentedRealityPureC++\Purec++\packages\OpenCV.2.4.10\build\native\../../build/native/include/ /Zi /nologo /W3 /WX- /sdl /O2 /Oi /GL /D HAS_OPENCV /D WIN32 /D NDEBUG /D _CONSOLE /D _LIB /D _CRT_SECURE_NO_WARNINGS /D _UNICODE /D UNICODE /Gm- /EHsc /MD /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /Fo"x64\Release\\" /Fd"x64\Release\vc120.pdb" /Gd /TP /errorReport:prompt 3dreconstruction.cpp
@@ -12,4 +12,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:57.25
+Time Elapsed 00:00:52.80

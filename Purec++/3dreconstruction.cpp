@@ -53,8 +53,6 @@ void write_eps(double * segs, int n, int dim, char * filename, int xsize, int ys
 	fprintf(eps, "%%%%EOF\n");
 }
 
-
-
 //LSD
 double* DoLSD(cv::Mat image, int& numLines)
 {
@@ -94,6 +92,26 @@ class PairOfTwoLines {
 		}
 };
 
+class LineScore {
+public:
+	uint goodPoints;
+	uint totalPoints;
+	uint LineIndex;
+	LineScore(uint a, uint b, uint c) {
+		goodPoints = a;
+		LineIndex = c;
+		totalPoints = b;
+	}
+};
+
+//ƒл€ сортировки
+bool comparator(const LineScore& l, const LineScore& r) {
+	if (l.totalPoints != 0 && r.totalPoints != 0) {
+		return ((double)l.goodPoints / l.totalPoints) > ((double)r.goodPoints / r.totalPoints);
+	}
+	return false;
+}
+
 //–андомное вещ. в интервале от a до b
 float RandomFloat(float a, float b) {
 	float random = ((float)rand()) / (float)RAND_MAX;
@@ -109,11 +127,11 @@ uint RandomInt(uint a, uint b) {
 }
 
 //ќкругление до целого по правилам округлени€
-int RoundTo(double x) {
+double RoundTo(double x) {
 	int y = floor(x);
 	if ((x - y) >= 0.5)
 		y++;
-	return y;
+	return (double)y;
 }
 
 //Intrinsic matrix
@@ -135,7 +153,6 @@ int FindIndexOfLine(vector<cv::Point3f> vec, cv::Point3f point) {
 	}
 	return -1;
 }
-
 
 //Cost функци€, которую минимизируем дл€ расчета углов alpha и beta
 class cost_function
@@ -485,6 +502,188 @@ void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVec
 	}
 }
 
+void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, double AngleTolerance, double step, double radius, vector<vector<uint>>& PolygonsVector) {
+	//¬ыделение групп параллельных линий
+	vector<vector<uint>> ParallelLineGroups;
+	vector<uint> FirstGroup;
+	ParallelLineGroups.push_back(FirstGroup);
+	vector<double> GroupCoefficients;
+	GroupCoefficients.push_back(0);
+	vector<uint> VerticalLinesGroup;
+	for (int i = 0; i < numLinesDetected; i++) {
+		cv::Point3f beginPoint = ExtendedLinesVector[2 * i];
+		cv::Point3f endPoint = ExtendedLinesVector[2 * i + 1];
+		if (endPoint.x - beginPoint.x != 0)
+		{
+			double AngleCoef = (endPoint.y - beginPoint.y) / (endPoint.x - beginPoint.x);
+			bool Found = false;
+			for (int j = 0; j < GroupCoefficients.size(); j++)
+			{
+				if (abs(AngleCoef - GroupCoefficients[j]) < AngleTolerance)
+				{
+					ParallelLineGroups[j].push_back(i);
+					Found = true;
+				}
+			}
+			if (!Found)
+			{
+				GroupCoefficients.push_back(AngleCoef);
+				vector<uint> Group;
+				Group.push_back(i);
+				ParallelLineGroups.push_back(Group);
+			}
+		}
+		else
+		{
+			VerticalLinesGroup.push_back(i);
+		}
+	}
+	ParallelLineGroups.push_back(VerticalLinesGroup);
+
+	vector<LineScore> LineScoreVector;
+	for (int i = 0; i < numLinesDetected; i++) {
+		LineScore temp = LineScore(0, 0, i);
+		LineScoreVector.push_back(temp);
+	}
+	
+	//ƒискритизаци€ линий с шагом step
+	vector<cv::Point3f> pointsForSearch;
+	vector<uint> PointIndexes;
+	for (int i = 0; i < numLinesDetected; i++)
+	{
+		uint totalPoints = 0;
+		cv::Point3f beginPoint = ExtendedLinesVector[2 * i];
+		cv::Point3f endPoint = ExtendedLinesVector[2 * i + 1];
+		double currentX = beginPoint.x + step;
+		while (currentX <= endPoint.x)
+		{
+			double currentY = (currentX - beginPoint.x) * (endPoint.y - beginPoint.y) / (endPoint.x - beginPoint.x) + beginPoint.y;
+			cv::Point3f point = cv::Point3f(currentX, currentY, 0);
+			pointsForSearch.push_back(point);
+			PointIndexes.push_back(i); //запоминаем кака€ точка к какой линии принадлежит
+			totalPoints++;
+			currentX += step;
+		}
+		if (totalPoints != 0)
+		{
+			LineScoreVector[i].totalPoints = totalPoints;
+		}
+	}
+
+	//ѕоиск линий в Octree
+	cv::Octree tree = cv::Octree(pointsForSearch);
+	vector<vector<uint>> PolygonsVector; //выходной вектор
+	for (int i = 0; i < ParallelLineGroups.size(); i++)
+	{
+		vector<uint> Group = ParallelLineGroups[i];
+		if (Group.size() >= 2)
+		{
+			for (int j = 0; j < Group.size(); j++)
+			{
+
+				for (int k = j + 1; k < Group.size(); k++)
+				{
+
+					uint FirstIndex = Group[j];
+					uint SecondIndex = Group[k];
+					cv::Point3f leftLineBeginPoint;
+					cv::Point3f leftLineEndPoint;
+					cv::Point3f rightLineBeginPoint;
+					cv::Point3f rightLineEndPoint;
+					//—мотрим кака€ лини€ левее
+					if (ExtendedLinesVector[2 * SecondIndex + 1].x >= ExtendedLinesVector[2 * FirstIndex + 1].x)
+					{
+						leftLineBeginPoint = ExtendedLinesVector[2 * FirstIndex];
+						leftLineEndPoint = ExtendedLinesVector[2 * FirstIndex + 1];
+						rightLineBeginPoint = ExtendedLinesVector[2 * SecondIndex];
+						rightLineEndPoint = ExtendedLinesVector[2 * SecondIndex + 1];
+					}
+					else
+					{
+						rightLineBeginPoint = ExtendedLinesVector[2 * FirstIndex];
+						rightLineEndPoint = ExtendedLinesVector[2 * FirstIndex + 1];
+						leftLineBeginPoint = ExtendedLinesVector[2 * SecondIndex];
+						leftLineEndPoint = ExtendedLinesVector[2 * SecondIndex + 1];
+					}
+					
+					//ѕоиск линии дл€ точек начала
+					vector<cv::Point3f> centersForSearchBegin;
+					vector<LineScore> currentBeginScores = LineScoreVector;
+					double currentX = leftLineBeginPoint.x + step / 2;
+					while (currentX <= rightLineBeginPoint.x) //дискритизаци€ соединительных отрезков с шагом step/2
+					{
+						double currentY = (currentX - leftLineBeginPoint.x) * (rightLineBeginPoint.y - leftLineBeginPoint.y) / (rightLineBeginPoint.x - leftLineBeginPoint.x) + leftLineBeginPoint.y;
+						cv::Point3f point = cv::Point3f(currentX, currentY, 0);
+						centersForSearchBegin.push_back(point);
+						currentX += step / 2;
+					}
+					for (int g = 0; g < centersForSearchBegin.size(); g++)
+					{
+						vector<cv::Point3f> foundedPoints;
+						tree.getPointsWithinSphere(centersForSearchBegin[g], radius, foundedPoints);
+						for (int h = 0; h < foundedPoints.size(); h++)
+						{
+							cv::Point3f tempPoint = foundedPoints[h];
+							auto position = find_if(pointsForSearch.begin(), pointsForSearch.end(), [&](const cv::Point3f& a){ //идентифицируем к какой линии принадлежит найденна€ точка
+								return a.x == tempPoint.x && a.y == tempPoint.y;
+							});
+							uint indexInVector = position - pointsForSearch.begin();
+							uint index = PointIndexes[indexInVector];
+							if (index != FirstIndex && index != SecondIndex)
+							{
+
+								currentBeginScores[index].goodPoints++;
+							}
+						}
+					}
+					sort(currentBeginScores.begin(), currentBeginScores.end(), comparator); //сортируем
+					uint BeginLineIndex = currentBeginScores[0].LineIndex; //выбираем лучшую
+
+					//ѕоиск линии дл€ точек начала
+					vector<cv::Point3f> centersForSearchEnd;
+					vector<LineScore> currentEndScores = LineScoreVector;
+					currentX = leftLineEndPoint.x + step / 2;
+					while (currentX <= rightLineEndPoint.x)
+					{
+						double currentY = (currentX - leftLineEndPoint.x) * (rightLineEndPoint.y - leftLineEndPoint.y) / (rightLineEndPoint.x - leftLineEndPoint.x) + leftLineEndPoint.y;
+						cv::Point3f point = cv::Point3f(currentX, currentY, 0);
+						centersForSearchEnd.push_back(point);
+						currentX += step / 2;
+					}
+					for (int g = 0; g < centersForSearchEnd.size(); g++)
+					{
+						vector<cv::Point3f> foundedPoints;
+						tree.getPointsWithinSphere(centersForSearchEnd[g], radius, foundedPoints);
+						for (int h = 0; h < foundedPoints.size(); h++)
+						{
+							cv::Point3f tempPoint = foundedPoints[h];
+							auto position = find_if(pointsForSearch.begin(), pointsForSearch.end(), [&](const cv::Point3f& a){
+								return a.x == tempPoint.x && a.y == tempPoint.y;
+							});
+							uint indexInVector = position - pointsForSearch.begin();
+							uint index = PointIndexes[indexInVector];
+							if (index != FirstIndex && index != SecondIndex)
+							{
+
+								currentEndScores[index].goodPoints++;
+							}
+						}
+					}
+					sort(currentEndScores.begin(), currentEndScores.end(), comparator);
+					uint EndLineIndex = currentEndScores[0].LineIndex;
+
+					if (currentEndScores[0].goodPoints != 0 && currentBeginScores[0].goodPoints != 0) { //если нашли обе линии, то сохран€ем замкнутую область (по 4-ем индексам линий)
+						vector<uint> FoundedPolygon = { FirstIndex, SecondIndex, BeginLineIndex, EndLineIndex };
+						PolygonsVector.push_back(FoundedPolygon);
+					}
+
+				}
+			}
+		}
+	}
+	cout << "Found number of polygons: " << PolygonsVector.size() << endl;
+}
+
 int main()
 {	
 	clock_t tStart = clock();
@@ -492,9 +691,14 @@ int main()
 
 	//ѕеременные дл€ настройки
 	double focal_length = 4; //фокальное рассто€ние в mm
-	double sensor_width = 4.59;
+	double sensor_width = 4.59; //ширина сенсора в mm
 	double ExtendThreshold = 0.01; //порог отклонени€ линии (дл€ удлинени€)
 	double countInlierThreshold = 0.0001; //если квадрат скал€рного произведени€ двух линий меньше этого числа, то мы считаем эти линии ортогональными
+	
+	double AngleTolerance = 0.00000001; //если abs(tg(k2) - tg(k1)) < AngleTolerance, то эти две линии объедин€ютс€ в одну группу (параллельных линий с некоторой степенью толерантности)
+	double step = 10; //шаг дл€ дискритизации линий
+	double radius = 20; //радиус поиска около точек соединительных линий
+	
 	uint ResizeIfMoreThan = 2000; //если ширина или высота изображени€ больше этого числа, то мы мен€ем размер изображени€
 	bool debug = 1;
 	
@@ -528,10 +732,10 @@ int main()
 	vector<cv::Point3f> LsdLinesVector; //элемент с номером 2*i дает нам точку начала i-ой линии, элемент с номером 2*i + 1 дает нам точку конца i-ой линии
 	for (int i = 0; i < numLinesDetected; i++) 
 	{
-		double x1 = LsdLinesArray[7 * i];
-		double y1 = LsdLinesArray[7 * i + 1];
-		double x2 = LsdLinesArray[7 * i + 2];
-		double y2 = LsdLinesArray[7 * i + 3];
+		double x1 = RoundTo(LsdLinesArray[7 * i]);
+		double y1 = RoundTo(LsdLinesArray[7 * i + 1]);
+		double x2 = RoundTo(LsdLinesArray[7 * i + 2]);
+		double y2 = RoundTo(LsdLinesArray[7 * i + 3]);
 		cv::Point3f point_one = cv::Point3f(x1, y1, 0);
 		cv::Point3f point_two = cv::Point3f(x2, y2, 0);
 		if (x1 >= x2) 
@@ -565,25 +769,29 @@ int main()
 	vector<int> DirectionsOfLines; //элемент с номером i означает направление i-ой линии (0=x, 1=y, 2=z, 3=xy, 4=xz, 5=yz)
 	assignDirections(numLinesDetected, ExtendedLinesVector, VanishingPoints, DirectionsOfLines);
 
+	//¬ыдел€ем все замкнутые области
+	vector<vector<uint>> PolygonsVector;
+	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector);
 
 
+	
 
 
+	//«апись в файл дл€ дебага
 	if (debug) {
-		write_eps(LsdLinesArray, numLinesDetected, 7, "test.eps", maxX, maxY, 1);
-		double * test = (double *)malloc(maxX * maxY * sizeof(double));
+		write_eps(LsdLinesArray, numLinesDetected, 7, "lsd_lines.eps", maxX, maxY, 1);
+		double * ExtendedLinesArray = (double *)malloc(maxX * maxY * sizeof(double));
 		for (int i = 0; i < numLinesDetected; i++) {
-			test[7 * i] = ExtendedLinesVector[2 * i].x;
-			test[7 * i + 1] = ExtendedLinesVector[2 * i].y;
-			test[7 * i + 2] = ExtendedLinesVector[2 * i + 1].x;
-			test[7 * i + 3] = ExtendedLinesVector[2 * i + 1].y;
-			test[7 * i + 4] = 1;
-			test[7 * i + 5] = 0.125;
-			test[7 * i + 6] = 15;
+			ExtendedLinesArray[7 * i] = ExtendedLinesVector[2 * i].x;
+			ExtendedLinesArray[7 * i + 1] = ExtendedLinesVector[2 * i].y;
+			ExtendedLinesArray[7 * i + 2] = ExtendedLinesVector[2 * i + 1].x;
+			ExtendedLinesArray[7 * i + 3] = ExtendedLinesVector[2 * i + 1].y;
+			ExtendedLinesArray[7 * i + 4] = 1;
+			ExtendedLinesArray[7 * i + 5] = 0.125;
+			ExtendedLinesArray[7 * i + 6] = 15;
 		}
-		write_eps(test, numLinesDetected, 7, "test_extend.eps", maxX, maxY, 1);
+		write_eps(ExtendedLinesArray, numLinesDetected, 7, "extended_lines.eps", maxX, maxY, 1);
 	}
-
 	system("pause");
 	return 0;
 }
