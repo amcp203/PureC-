@@ -299,7 +299,7 @@ dlib::matrix<double, 0, 1> RANSAC(uint maxTrials, double threshold, double f, ve
 	return bestSolution;
 }
 
-void ExtendLines(int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f>& ExtendedLinesVector, vector<PairOfTwoLines>& LinePairsVector, double threshold) {
+void ExtendLines(int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f>& ExtendedLinesVector, vector<PairOfTwoLines>& LinePairsVector, double threshold, int maxX, int maxY) {
 	cv::Octree mainTree = cv::Octree(LsdLinesVector);
 	for (int i = 0; i < numLinesDetected; i++) {
 		cv::Point3f beginPoint = LsdLinesVector[2 * i];
@@ -427,6 +427,18 @@ void ExtendLines(int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vecto
 			}
 		}
 	}
+	//Добавляем границы кадра как линии
+	ExtendedLinesVector.push_back(cv::Point3f(0, 0, 0));
+	ExtendedLinesVector.push_back(cv::Point3f(0, maxY, 0));
+
+	ExtendedLinesVector.push_back(cv::Point3f(maxX, 0, 0));
+	ExtendedLinesVector.push_back(cv::Point3f(maxX, maxY, 0));
+
+	ExtendedLinesVector.push_back(cv::Point3f(0, 0, 0));
+	ExtendedLinesVector.push_back(cv::Point3f(maxX, 0, 0));
+
+	ExtendedLinesVector.push_back(cv::Point3f(0, maxY, 0));
+	ExtendedLinesVector.push_back(cv::Point3f(maxX, maxY, 0));
 }
 
 void getVanishingPoints(double alpha, double beta, double f, vector<cv::Point3f>& output) {
@@ -465,7 +477,7 @@ void getVanishingPoints(double alpha, double beta, double f, vector<cv::Point3f>
 	output.push_back(Vz);
 }
 
-void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, vector<cv::Point3f> VanishingPoints, vector<int>& output) {
+void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, vector<cv::Point3f> VanishingPoints, vector<uint>& output) {
 	for (int i = 0; i < numLinesDetected; i++) {
 		cv::Point3f beginPoint = ExtendedLinesVector[2 * i];
 		cv::Point3f endPoint = ExtendedLinesVector[2 * i + 1];
@@ -479,7 +491,7 @@ void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVec
 		cv::Vec3f lineToZ = middlePoint - VanishingPoints[2];
 		double cosZ = abs(line.dot(lineToZ) / (cv::norm(line)*cv::norm(lineToZ)));
 
-		int result;
+		uint result;
 		if (cosX <= 0.9 && cosY <= 0.9 && abs(cosX - cosY) < 0.01) {
 			result = 3;
 		}
@@ -572,7 +584,6 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 
 	//Поиск линий в Octree
 	cv::Octree tree = cv::Octree(pointsForSearch);
-	vector<vector<uint>> PolygonsVector; //выходной вектор
 	for (int i = 0; i < ParallelLineGroups.size(); i++)
 	{
 		vector<uint> Group = ParallelLineGroups[i];
@@ -684,6 +695,77 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 	cout << "Found number of polygons: " << PolygonsVector.size() << endl;
 }
 
+double lineSupportingScore(vector<uint> lines, uint lineIndex, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector) {
+	double result = 0;
+	double summ = 0;
+	cv::Point3f CurrentLineBeginPoint = ExtendedLinesVector[lineIndex * 2];
+	cv::Point3f CurrentLineEndPoint = ExtendedLinesVector[lineIndex * 2 + 1];
+	double currentLineLength = cv::norm(CurrentLineEndPoint - CurrentLineBeginPoint);
+
+	cv::Point3f LSDLineBeginPoint = LsdLinesVector[lineIndex * 2];
+	cv::Point3f LSDLineEndPoint = LsdLinesVector[lineIndex * 2 + 1];
+	double LSDLineLength = cv::norm(LSDLineEndPoint - LSDLineBeginPoint);
+
+	for (int i = 0; i < lines.size(); i++) {
+		cv::Point3f tempPointOne = ExtendedLinesVector[lines[i] * 2];
+		cv::Point3f tempPointTwo = ExtendedLinesVector[lines[i] * 2 + 1];
+		double length = cv::norm(tempPointTwo - tempPointOne);
+		summ += length;
+	}
+	result = currentLineLength / summ + LSDLineLength / currentLineLength;
+	return result;
+
+}
+
+//В разработке
+double DirectionScore(vector<uint> lines, uint direction, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines) {
+	double result = 0;
+	double Wocc = 1; // доделать подсчет этого коэффициента
+	for (int i = 0; i < lines.size(); i++) {
+		uint index = lines[i];
+		if (direction == DirectionsOfLines[index]) {
+			result += Wocc*lineSupportingScore(lines, index, numLinesDetected, LsdLinesVector, ExtendedLinesVector);
+		}
+	}
+	return result;
+}
+
+//В разработке
+double dataCost(vector<uint> lines, uint direction, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines) {
+	double result = 0;
+	uint Warea = 100; // доделать подсчет этого коэффициента
+	if (direction == 0) {
+		result = -Warea*(DirectionScore(lines, 1, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 2, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 5, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines));
+	}
+	else if (direction == 1) {
+		result = -Warea*(DirectionScore(lines, 0, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 2, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 4, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines));
+	}
+	else if (direction == 2) {
+		result = -Warea*(DirectionScore(lines, 0, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 1, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 3, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines));
+	}
+	return result;
+	
+}
+
+//В разработке
+double EnergyFunction(vector<uint> PlaneNormals, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, vector<vector<uint>> PolygonsVector) {
+	double dataCostValue = 0;
+	double smoothnessCostValue = 0;
+
+	for (int i = 0; i < PolygonsVector.size(); i++) {
+		vector<uint> lines = PolygonsVector[i];
+		uint normalDirection = PlaneNormals[i];
+		dataCostValue += dataCost(lines, normalDirection, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines);
+	}
+	return dataCostValue + smoothnessCostValue;
+}
+
+
+
+
+
+
+
 int main()
 {	
 	clock_t tStart = clock();
@@ -695,8 +777,8 @@ int main()
 	double ExtendThreshold = 0.01; //порог отклонения линии (для удлинения)
 	double countInlierThreshold = 0.0001; //если квадрат скалярного произведения двух линий меньше этого числа, то мы считаем эти линии ортогональными
 	
-	double AngleTolerance = 0.00000001; //если abs(tg(k2) - tg(k1)) < AngleTolerance, то эти две линии объединяются в одну группу (параллельных линий с некоторой степенью толерантности)
-	double step = 10; //шаг для дискритизации линий
+	double AngleTolerance = 0.0001; //если abs(tg(angle1) - tg(angle2)) < AngleTolerance, то эти две линии объединяются в одну группу (параллельных линий с некоторой степенью толерантности)
+	double step = 6; //шаг для дискритизации линий
 	double radius = 20; //радиус поиска около точек соединительных линий
 	
 	uint ResizeIfMoreThan = 2000; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
@@ -753,7 +835,7 @@ int main()
 	//Удлинение
 	vector<cv::Point3f> ExtendedLinesVector; //элемент с индексом 2*i дает нам точку начала i-ой линии, элемент с индексом 2*i + 1 дает нам точку конца i-ой линии
 	vector<PairOfTwoLines> LinePairsVector; //в каждом элементе этого вектора лежит два индекса (линий, которые пересекаются)
-	ExtendLines(numLinesDetected, LsdLinesVector, ExtendedLinesVector, LinePairsVector, ExtendThreshold);
+	ExtendLines(numLinesDetected, LsdLinesVector, ExtendedLinesVector, LinePairsVector, ExtendThreshold, maxX, maxY);
 	cout << "Number of line pairs: " << LinePairsVector.size() << endl;
 	
 	//RANSAC (находим углы альфа и бэта)
@@ -766,17 +848,14 @@ int main()
 	getVanishingPoints(solution(0), solution(1), f, VanishingPoints);
 
 	//Находим направление каждой линии
-	vector<int> DirectionsOfLines; //элемент с номером i означает направление i-ой линии (0=x, 1=y, 2=z, 3=xy, 4=xz, 5=yz)
+	vector<uint> DirectionsOfLines; //элемент с номером i означает направление i-ой линии (0=x, 1=y, 2=z, 3=xy, 4=xz, 5=yz)
 	assignDirections(numLinesDetected, ExtendedLinesVector, VanishingPoints, DirectionsOfLines);
 
 	//Выделяем все замкнутые области
 	vector<vector<uint>> PolygonsVector;
 	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector);
 
-
-	
-
-
+	/*
 	//Запись в файл для дебага
 	if (debug) {
 		write_eps(LsdLinesArray, numLinesDetected, 7, "lsd_lines.eps", maxX, maxY, 1);
@@ -791,7 +870,36 @@ int main()
 			ExtendedLinesArray[7 * i + 6] = 15;
 		}
 		write_eps(ExtendedLinesArray, numLinesDetected, 7, "extended_lines.eps", maxX, maxY, 1);
-	}
+
+
+		for (int i = 0; i < 100; i++) {
+			cv::Mat copyImage = image.clone();
+			vector<uint> bla = PolygonsVector[i];
+			uint index1 = bla[0];
+			uint index2 = bla[1];
+			uint index3 = bla[2];
+			uint index4 = bla[3];
+			
+			cv::Point3f B_1 = ExtendedLinesVector[index1 * 2];
+			cv::Point3f E_1 = ExtendedLinesVector[index1 * 2 + 1];
+			cv::Point3f B_2 = ExtendedLinesVector[index2 * 2];
+			cv::Point3f E_2 = ExtendedLinesVector[index2 * 2 + 1];
+			cv::Point3f B_3 = ExtendedLinesVector[index3 * 2];
+			cv::Point3f E_3 = ExtendedLinesVector[index3 * 2 + 1];
+			cv::Point3f B_4 = ExtendedLinesVector[index4 * 2];
+			cv::Point3f E_4 = ExtendedLinesVector[index4 * 2 + 1];
+
+			vector<cv::Point> tempVec = { cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y) };
+			
+			const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
+			//cv::fillConvexPoly(image, &tempVec[0], 8, blaColor);
+			cv::line(copyImage, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 5);
+			cv::line(copyImage, cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), blaColor, 5);
+			cv::line(copyImage, cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), blaColor, 5);
+			cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
+			cv::imwrite("polygons_" + std::to_string(i) + ".jpg", copyImage);
+		}
+	}*/
 	system("pause");
 	return 0;
 }
