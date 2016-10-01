@@ -105,11 +105,16 @@ public:
 };
 
 //Для сортировки
-bool comparator(const LineScore& l, const LineScore& r) {
-	if (l.totalPoints != 0 && r.totalPoints != 0) {
-		return ((double)l.goodPoints / l.totalPoints) > ((double)r.goodPoints / r.totalPoints);
+bool comparator(const LineScore l, const LineScore r) {
+	double score1 = 0;
+	double score2 = 0;
+	if (l.totalPoints != 0) {
+		score1 = double(l.goodPoints) / l.totalPoints;
 	}
-	return false;
+	if (r.totalPoints != 0) {
+		score2 = double(r.goodPoints) / r.totalPoints;
+	}
+	return score1 > score2;
 }
 
 //Рандомное вещ. в интервале от a до b
@@ -601,6 +606,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 					cv::Point3f leftLineEndPoint;
 					cv::Point3f rightLineBeginPoint;
 					cv::Point3f rightLineEndPoint;
+					
 					//Смотрим какая линия левее
 					if (ExtendedLinesVector[2 * SecondIndex + 1].x >= ExtendedLinesVector[2 * FirstIndex + 1].x)
 					{
@@ -616,10 +622,12 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 						leftLineBeginPoint = ExtendedLinesVector[2 * SecondIndex];
 						leftLineEndPoint = ExtendedLinesVector[2 * SecondIndex + 1];
 					}
-					
+		
 					//Поиск линии для точек начала
 					vector<cv::Point3f> centersForSearchBegin;
 					vector<LineScore> currentBeginScores = LineScoreVector;
+					cv::Vec3f beginLineExpected = rightLineBeginPoint - leftLineBeginPoint;
+					cv::Vec3f endLineExpected = rightLineEndPoint - leftLineEndPoint;
 					double currentX = leftLineBeginPoint.x + step / 2;
 					while (currentX <= rightLineBeginPoint.x) //дискритизация соединительных отрезков с шагом step/2
 					{
@@ -642,8 +650,13 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 							uint index = PointIndexes[indexInVector];
 							if (index != FirstIndex && index != SecondIndex)
 							{
-
-								currentBeginScores[index].goodPoints++;
+								cv::Point3f beginPointFound = ExtendedLinesVector[index * 2];
+								cv::Point3f endPointFound = ExtendedLinesVector[index * 2 + 1];
+								cv::Vec3f line = endPointFound - beginPointFound;
+								double cosAngle = abs(beginLineExpected.dot(line) / (cv::norm(line)*cv::norm(beginLineExpected)));
+								if (cosAngle > 0.95) { //фильтрация совсем трешовых вариантов
+									currentBeginScores[index].goodPoints++;
+								}
 							}
 						}
 					}
@@ -675,11 +688,18 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 							uint index = PointIndexes[indexInVector];
 							if (index != FirstIndex && index != SecondIndex)
 							{
-
-								currentEndScores[index].goodPoints++;
+								
+								cv::Point3f beginPointFound = ExtendedLinesVector[index * 2];
+								cv::Point3f endPointFound = ExtendedLinesVector[index * 2 + 1];
+								cv::Vec3f line = endPointFound - beginPointFound;
+								double cosAngle = abs(endLineExpected.dot(line) / (cv::norm(line)*cv::norm(endLineExpected)));
+								if (cosAngle > 0.95) {
+									currentEndScores[index].goodPoints++;
+								}
 							}
 						}
 					}
+					
 					sort(currentEndScores.begin(), currentEndScores.end(), comparator);
 					uint EndLineIndex = currentEndScores[0].LineIndex;
 
@@ -693,6 +713,60 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 		}
 	}
 	cout << "Found number of polygons: " << PolygonsVector.size() << endl;
+}
+
+//Надо переделать
+void getNumbersOfPixels(cv::Mat image, vector<vector<uint>> PolygonsVector, int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, vector<int>& NumberOfPixelsInArea) {
+	for (int i = 0; i < PolygonsVector.size(); i++) {
+		int counter = 0;
+
+		cv::Mat copyImage = image.clone();
+		vector<uint> indexVector = PolygonsVector[i];
+		uint index1 = indexVector[0];
+		uint index2 = indexVector[1];
+		uint index3 = indexVector[2];
+		uint index4 = indexVector[3];
+
+		cv::Point3f B_1 = ExtendedLinesVector[index1 * 2];
+		cv::Point3f E_1 = ExtendedLinesVector[index1 * 2 + 1];
+		cv::Point3f B_2 = ExtendedLinesVector[index2 * 2];
+		cv::Point3f E_2 = ExtendedLinesVector[index2 * 2 + 1];
+		cv::Point3f B_3 = ExtendedLinesVector[index3 * 2];
+		cv::Point3f E_3 = ExtendedLinesVector[index3 * 2 + 1];
+		cv::Point3f B_4 = ExtendedLinesVector[index4 * 2];
+		cv::Point3f E_4 = ExtendedLinesVector[index4 * 2 + 1];
+
+		vector<cv::Point> tempVec = { cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y) };
+
+		const cv::Scalar blaColor = cv::Scalar(74, 184, 72, 255);
+		cv::fillConvexPoly(copyImage, &tempVec[0], 4, blaColor);
+
+		for (int x = 0; x < copyImage.cols; x++) {
+			for (int y = 0; y < copyImage.rows; y++) {
+				cv::Vec3b color = copyImage.at<cv::Vec3b>(cv::Point(x, y));
+				if (color[0] == 74 && color[1] == 184 && color[2] == 72) {
+					counter++;
+				}
+			}
+		}
+		NumberOfPixelsInArea.push_back(counter);
+	}
+}
+
+void getIntersections(vector<vector<uint>> PolygonsVector, bool** &PolygonIntersections) {
+	for (int i = 0; i < PolygonsVector.size(); i++) {
+		vector<uint> lines = PolygonsVector[i];
+		for (int j = 0; j < lines.size(); j++) {
+			uint index = lines[j];
+			for (int kek = i + 1; kek < PolygonsVector.size(); kek++) {
+				vector<uint> currentLines = PolygonsVector[kek];
+				if (currentLines[0] == index || currentLines[1] == index || currentLines[2] == index || currentLines[3] == index) {
+					PolygonIntersections[i][kek] = 1;
+					PolygonIntersections[kek][i] = 1;
+				}
+			}
+		}
+	}
 }
 
 double lineSupportingScore(vector<uint> lines, uint lineIndex, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector) {
@@ -717,7 +791,7 @@ double lineSupportingScore(vector<uint> lines, uint lineIndex, int numLinesDetec
 
 }
 
-//В разработке
+//Wocc доделать
 double DirectionScore(vector<uint> lines, uint direction, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines) {
 	double result = 0;
 	double Wocc = 1; // доделать подсчет этого коэффициента
@@ -730,10 +804,8 @@ double DirectionScore(vector<uint> lines, uint direction, int numLinesDetected, 
 	return result;
 }
 
-//В разработке
-double dataCost(vector<uint> lines, uint direction, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines) {
+double dataCost(vector<uint> lines, uint direction, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, int Warea) {
 	double result = 0;
-	uint Warea = 100; // доделать подсчет этого коэффициента
 	if (direction == 0) {
 		result = -Warea*(DirectionScore(lines, 1, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 2, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 5, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines));
 	}
@@ -747,18 +819,213 @@ double dataCost(vector<uint> lines, uint direction, int numLinesDetected, vector
 	
 }
 
-//В разработке
-double EnergyFunction(vector<uint> PlaneNormals, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, vector<vector<uint>> PolygonsVector) {
+double smoothnessCost(vector<uint> linesA, vector<uint> linesB, uint directionA, uint directionB, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines) {
+	int Csmooth = 5;
+	if (directionA != directionB) {
+		uint commonLine;
+		for (int i = 0; i < linesA.size(); i++) {
+			for (int j = 0; j < linesB.size(); j++) {
+				if (linesA[i] = linesB[j]) {
+					commonLine = linesA[i];
+					break;
+				}
+			}
+			break;
+		}
+		cv::Point3f lsdLineBegin = LsdLinesVector[2 * commonLine];
+		cv::Point3f lsdLineEnd = LsdLinesVector[2 * commonLine + 1];
+		double LSD_length = cv::norm(lsdLineEnd - lsdLineBegin);
+		cv::Point3f commonLineBegin = ExtendedLinesVector[2 * commonLine];
+		cv::Point3f commonLineEnd = ExtendedLinesVector[2 * commonLine + 1];
+		double CommonLine_length = cv::norm(commonLineEnd - commonLineBegin);
+		double Wl = 1 - 0.9*(LSD_length/CommonLine_length);
+		double Wdir;
+		if (directionA != DirectionsOfLines[commonLine] && directionB != DirectionsOfLines[commonLine]) {
+			Wdir = 0.1;
+		}
+		else {
+			Wdir = 1.0;
+		}
+		return Wdir*Wl*Csmooth;
+	}
+	return 0;
+	
+}
+
+double EnergyFunction(vector<uint> PlaneNormals, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, vector<vector<uint>> PolygonsVector, vector<int> NumberOfPixelsInArea, bool** PolygonIntersections) {
 	double dataCostValue = 0;
 	double smoothnessCostValue = 0;
-
 	for (int i = 0; i < PolygonsVector.size(); i++) {
 		vector<uint> lines = PolygonsVector[i];
 		uint normalDirection = PlaneNormals[i];
-		dataCostValue += dataCost(lines, normalDirection, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines);
+		uint Warea = NumberOfPixelsInArea[i];
+		dataCostValue += dataCost(lines, normalDirection, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, Warea);
+		for (int j = i; j < PolygonsVector.size(); j++) {
+			if (i != j && PolygonIntersections[i][j] == 1) {
+				smoothnessCostValue += smoothnessCost(lines, PolygonsVector[j], normalDirection, PlaneNormals[j], LsdLinesVector, ExtendedLinesVector, DirectionsOfLines);
+			}
+		}
 	}
 	return dataCostValue + smoothnessCostValue;
 }
+
+void mincut(int** g, int n, vector<int>& best_cut) {
+	const int MAXN = 5000;
+	int best_cost = 1000000000;
+	vector<int> v[MAXN];
+	for (int i = 0; i<n; ++i)
+		v[i].assign(1, i);
+	int w[MAXN];
+	bool exist[MAXN], in_a[MAXN];
+	memset(exist, true, sizeof exist);
+	for (int ph = 0; ph<n - 1; ++ph) {
+		memset(in_a, false, sizeof in_a);
+		memset(w, 0, sizeof w);
+		for (int it = 0, prev; it<n - ph; ++it) {
+			int sel = -1;
+			for (int i = 0; i<n; ++i)
+			if (exist[i] && !in_a[i] && (sel == -1 || w[i] > w[sel]))
+				sel = i;
+			if (it == n - ph - 1) {
+				if (w[sel] < best_cost)
+					best_cost = w[sel], best_cut = v[sel];
+				v[prev].insert(v[prev].end(), v[sel].begin(), v[sel].end());
+				for (int i = 0; i<n; ++i)
+					g[prev][i] = g[i][prev] += g[sel][i];
+				exist[sel] = false;
+			}
+			else {
+				in_a[sel] = true;
+				for (int i = 0; i < n; ++i)
+					w[i] += g[sel][i];
+				prev = sel;
+			}
+		}
+	}
+}
+
+void getNormals(vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, vector<vector<uint>> PolygonsVector, vector<int> NumberOfPixelsInArea, bool** PolygonIntersections) {
+	for (int i = 0; i < PolygonsVector.size(); i++) {
+		uint randomNormalDirection = RandomInt(0,2);
+		PlaneNormals.push_back(randomNormalDirection);
+	}
+	double InitialEnergyValue = EnergyFunction(PlaneNormals, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, NumberOfPixelsInArea, PolygonIntersections);
+	
+	bool success = 1;
+	while (success)
+	{
+		success = 0;
+		for (int swap = 0; swap < 3; swap++) //swap = 0, то меняем X и Y; swap = 1, то меняем Y и Z; swap = 2, то меняем X и Z
+		{	
+			uint AlphaDir, BetaDir;
+			if (swap == 0) {
+				AlphaDir = 0;
+				BetaDir = 1;
+			}
+			else if (swap == 1) {
+				AlphaDir = 1;
+				BetaDir = 2;
+			}
+			else {
+				AlphaDir = 0;
+				BetaDir = 2;
+			}
+
+			//Строим граф
+			int DIM = PolygonsVector.size() + 2;
+			int **g = new int *[DIM];;
+			for (int j = 0; j < DIM; j++) {   
+				g[j] = new int[DIM];
+			}
+			g[DIM - 1][DIM - 1] = 0; g[DIM - 2][DIM - 2] = 0; g[DIM - 1][DIM - 2] = 0; g[DIM - 2][DIM - 1] = 0;
+
+			for (int i = 0; i < DIM-2; i++) {
+				if (PlaneNormals[i] != AlphaDir && PlaneNormals[i] != BetaDir) {
+					int* zeroArray = new int[DIM];
+					memset(zeroArray, 0, sizeof(zeroArray));
+					g[i] = zeroArray;
+					for (int k = 0; k < DIM; k++) {
+						g[k][i] = 0;
+					}
+				}
+				else {
+					int dataCostAlpha = dataCost(PolygonsVector[i], AlphaDir, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, NumberOfPixelsInArea[i]);
+					int dataCostBeta = dataCost(PolygonsVector[i], BetaDir, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, NumberOfPixelsInArea[i]);;
+					double smoothnessCostAlpha = 0;
+					for (int it = 0; it < PolygonsVector.size(); it++) {
+						if (PolygonIntersections[i][it] == 1 && PlaneNormals[it] != AlphaDir && PlaneNormals[it] != BetaDir) {
+							smoothnessCostAlpha += smoothnessCost(PolygonsVector[i], PolygonsVector[it], AlphaDir, PlaneNormals[it], LsdLinesVector, ExtendedLinesVector, DirectionsOfLines);
+						}
+					}
+					double smoothnessCostBeta = 0;
+					for (int it = 0; it < PolygonsVector.size(); it++) {
+						if (PolygonIntersections[i][it] == 1 && PlaneNormals[it] != AlphaDir && PlaneNormals[it] != BetaDir) {
+							smoothnessCostAlpha += smoothnessCost(PolygonsVector[i], PolygonsVector[it], BetaDir, PlaneNormals[it], LsdLinesVector, ExtendedLinesVector, DirectionsOfLines);
+						}
+					}
+					g[i][DIM - 2] = dataCostAlpha + (int)RoundTo(smoothnessCostAlpha); //tlinkA
+					g[i][DIM - 1] = dataCostBeta + (int)RoundTo(smoothnessCostBeta); // tlinkB
+					for (int j = i; j < DIM - 2; j++) {
+						
+						if (i == j || PolygonIntersections[i][j] == 0) {
+							g[i][j] = 0;
+						}
+						else {
+							if (PlaneNormals[j] == AlphaDir || PlaneNormals[j] == BetaDir) {
+								g[i][j] = (int)RoundTo(smoothnessCost(PolygonsVector[i], PolygonsVector[j], AlphaDir, BetaDir, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines));
+							}
+							else {
+								g[i][j] = 0;
+							}
+						}
+					}
+				}
+			}
+			for (int i = 0; i < DIM; i++) {
+				for (int j = 0; j < i; j++) {
+					g[i][j] = g[j][i];
+				}
+			}
+			
+			//делаем минимальный разрез
+			vector<int> minimumCut;
+			vector<uint> newPlaneNormals = PlaneNormals;
+			mincut(g, DIM, minimumCut);
+			auto pos = find(minimumCut.begin(), minimumCut.end(), DIM-2);
+			if (pos != minimumCut.end()) {
+				for (int kek = 0; kek < newPlaneNormals.size(); kek++) {
+					auto position = find(minimumCut.begin(), minimumCut.end(), kek);
+					if (position != minimumCut.end()) {
+						newPlaneNormals[kek] = BetaDir;
+					}
+					else {
+						newPlaneNormals[kek] = AlphaDir;
+					}
+				}
+			}
+			else {
+				for (int kek = 0; kek < newPlaneNormals.size(); kek++) {
+					auto position = find(minimumCut.begin(), minimumCut.end(), kek);
+					if (position != minimumCut.end()) {
+						newPlaneNormals[kek] = AlphaDir;
+					}
+					else {
+						newPlaneNormals[kek] = BetaDir;
+					}
+				}
+			}
+
+			double EnergyValue_With_Hat = EnergyFunction(newPlaneNormals, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, NumberOfPixelsInArea, PolygonIntersections);
+			if (EnergyValue_With_Hat < InitialEnergyValue)
+			{
+				PlaneNormals = newPlaneNormals;
+				InitialEnergyValue = EnergyValue_With_Hat;
+				success = 1;
+			}
+		}	
+	}
+}
+
 
 
 
@@ -770,7 +1037,7 @@ int main()
 {	
 	clock_t tStart = clock();
 	srand(time(0)); //чтобы последовательность рандомных чисел была всегда уникальна при новом запуске
-
+	
 	//Переменные для настройки
 	double focal_length = 4; //фокальное расстояние в mm
 	double sensor_width = 4.59; //ширина сенсора в mm
@@ -855,7 +1122,28 @@ int main()
 	vector<vector<uint>> PolygonsVector;
 	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector);
 
-	/*
+	
+	//Смотрим сколько пикселей в каждой области
+	vector<int> NumbersOfPixelsInArea;
+	getNumbersOfPixels(image, PolygonsVector, numLinesDetected, ExtendedLinesVector, NumbersOfPixelsInArea);
+	
+	//Запоминаем какие области с кем являются соседними
+	int sizeOfPolInter = PolygonsVector.size();
+	bool **PolygonIntersections = new bool *[sizeOfPolInter];;
+	for (int j = 0; j < sizeOfPolInter; j++) {
+		PolygonIntersections[j] = new bool[sizeOfPolInter];
+	}
+	for (int k1 = 0; k1 < sizeOfPolInter; k1++) {
+		for (int k2 = 0; k2 < sizeOfPolInter; k2++) {
+			PolygonIntersections[k1][k2] = 0;
+		}
+	}
+	getIntersections(PolygonsVector, PolygonIntersections);
+
+	//Получаем нормали
+	vector<uint> PlaneNormals;
+	getNormals(PlaneNormals, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, NumbersOfPixelsInArea, PolygonIntersections);
+
 	//Запись в файл для дебага
 	if (debug) {
 		write_eps(LsdLinesArray, numLinesDetected, 7, "lsd_lines.eps", maxX, maxY, 1);
@@ -870,8 +1158,25 @@ int main()
 			ExtendedLinesArray[7 * i + 6] = 15;
 		}
 		write_eps(ExtendedLinesArray, numLinesDetected, 7, "extended_lines.eps", maxX, maxY, 1);
+		
+		cv::Mat copyImage = cv::imread("lsd_lines.jpg");
+		for (int i = 0; i < numLinesDetected; i++) {
+			
 
+			const cv::Scalar blaColor = cv::Scalar(255, 0, 0, 255);
 
+			cv::Point3f B_1 = ExtendedLinesVector[i * 2];
+			cv::Point3f E_1 = ExtendedLinesVector[i * 2 + 1];
+			cv::Vec3f line1 = E_1 - B_1;
+
+			if (cv::norm(line1) > 50) {
+				cv::line(copyImage, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 3);
+			}
+		
+		}
+		cv::imwrite("ext.jpg", copyImage);
+
+		/*
 		for (int i = 0; i < 100; i++) {
 			cv::Mat copyImage = image.clone();
 			vector<uint> bla = PolygonsVector[i];
@@ -892,14 +1197,72 @@ int main()
 			vector<cv::Point> tempVec = { cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y) };
 			
 			const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
-			//cv::fillConvexPoly(image, &tempVec[0], 8, blaColor);
-			cv::line(copyImage, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 5);
-			cv::line(copyImage, cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), blaColor, 5);
-			cv::line(copyImage, cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), blaColor, 5);
-			cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
+			cv::fillConvexPoly(copyImage, &tempVec[0], 4, blaColor);
+			//cv::line(copyImage, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
 			cv::imwrite("polygons_" + std::to_string(i) + ".jpg", copyImage);
 		}
-	}*/
+		cv::Mat copyImage = image.clone();
+		for (int i = 0; i < PolygonsVector.size(); i++) {
+			vector<uint> bla = PolygonsVector[i];
+			uint index1 = bla[0];
+			uint index2 = bla[1];
+			uint index3 = bla[2];
+			uint index4 = bla[3];
+			cv::Point3f B_1 = ExtendedLinesVector[index1 * 2];
+			cv::Point3f E_1 = ExtendedLinesVector[index1 * 2 + 1];
+			cv::Point3f B_2 = ExtendedLinesVector[index2 * 2];
+			cv::Point3f E_2 = ExtendedLinesVector[index2 * 2 + 1];
+			cv::Point3f B_3 = ExtendedLinesVector[index3 * 2];
+			cv::Point3f E_3 = ExtendedLinesVector[index3 * 2 + 1];
+			cv::Point3f B_4 = ExtendedLinesVector[index4 * 2];
+			cv::Point3f E_4 = ExtendedLinesVector[index4 * 2 + 1];
+			vector<cv::Point> tempVec = { cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), cv::Point(E_4.x, E_4.y), cv::Point(E_3.x, E_3.y) };
+			const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
+			cv::fillConvexPoly(copyImage, &tempVec[0], 4, blaColor);
+			//cv::line(copyImage, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
+		}
+		cv::imwrite("all_polygons.jpg", copyImage);
+		cv::Mat secondImage = image.clone();
+		for (int i = 0; i < PolygonsVector.size(); i++) {
+			vector<uint> bla = PolygonsVector[i];
+			uint index1 = bla[0];
+			uint index2 = bla[1];
+			uint index3 = bla[2];
+			uint index4 = bla[3];
+			cv::Point3f B_1 = ExtendedLinesVector[index1 * 2];
+			cv::Point3f E_1 = ExtendedLinesVector[index1 * 2 + 1];
+			cv::Point3f B_2 = ExtendedLinesVector[index2 * 2];
+			cv::Point3f E_2 = ExtendedLinesVector[index2 * 2 + 1];
+			cv::Point3f B_3 = ExtendedLinesVector[index3 * 2];
+			cv::Point3f E_3 = ExtendedLinesVector[index3 * 2 + 1];
+			cv::Point3f B_4 = ExtendedLinesVector[index4 * 2];
+			cv::Point3f E_4 = ExtendedLinesVector[index4 * 2 + 1];
+			vector<cv::Point> tempVec = { cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y) };
+			if (PlaneNormals[i] == 0) {
+				const cv::Scalar blaColor = cv::Scalar(0, 0, 255, 255);
+				cv::fillConvexPoly(secondImage, &tempVec[0], 4, blaColor);
+			}
+			else if (PlaneNormals[i] == 1) {
+				const cv::Scalar blaColor = cv::Scalar(0, 255, 0, 255);
+				cv::fillConvexPoly(secondImage, &tempVec[0], 4, blaColor);
+			}
+			else if (PlaneNormals[i] == 2) {
+				const cv::Scalar blaColor = cv::Scalar(255, 0, 0, 255);
+				cv::fillConvexPoly(secondImage, &tempVec[0], 4, blaColor);
+			}
+			//cv::line(copyImage, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), blaColor, 5);
+			//cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
+		}
+		cv::imwrite("normals.jpg", secondImage);*/
+	}
 	system("pause");
 	return 0;
 }
