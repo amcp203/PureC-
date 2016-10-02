@@ -1144,6 +1144,14 @@ int main()
 	vector<uint> PlaneNormals;
 	getNormals(PlaneNormals, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, NumbersOfPixelsInArea, PolygonIntersections);
 
+
+
+
+
+
+
+
+
 	//Запись в файл для дебага
 	if (debug) {
 		write_eps(LsdLinesArray, numLinesDetected, 7, "lsd_lines.eps", maxX, maxY, 1);
@@ -1159,51 +1167,32 @@ int main()
 		}
 		write_eps(ExtendedLinesArray, numLinesDetected, 7, "extended_lines.eps", maxX, maxY, 1);
 		
-		cv::Mat copyImage = cv::imread("lsd_lines.jpg");
+		cv::Mat copyImage2 = cv::imread("test.jpg");
 		for (int i = 0; i < numLinesDetected; i++) {
 			
-
-			const cv::Scalar blaColor = cv::Scalar(255, 0, 0, 255);
-
-			cv::Point3f B_1 = ExtendedLinesVector[i * 2];
-			cv::Point3f E_1 = ExtendedLinesVector[i * 2 + 1];
-			cv::Vec3f line1 = E_1 - B_1;
-
-			if (cv::norm(line1) > 50) {
-				cv::line(copyImage, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 3);
+			if (DirectionsOfLines[i] == 0) {
+				const cv::Scalar blaColor = cv::Scalar(255, 0, 0, 255);
+				cv::Point3f B_1 = ExtendedLinesVector[i * 2];
+				cv::Point3f E_1 = ExtendedLinesVector[i * 2 + 1];
+				cv::line(copyImage2, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 3);
+			}
+			if (DirectionsOfLines[i] == 1) {
+				const cv::Scalar blaColor = cv::Scalar(0, 255, 0, 255);
+				cv::Point3f B_1 = ExtendedLinesVector[i * 2];
+				cv::Point3f E_1 = ExtendedLinesVector[i * 2 + 1];
+				cv::line(copyImage2, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 3);
+			}
+			if (DirectionsOfLines[i] == 2) {
+				const cv::Scalar blaColor = cv::Scalar(0, 0, 255, 255);
+				cv::Point3f B_1 = ExtendedLinesVector[i * 2];
+				cv::Point3f E_1 = ExtendedLinesVector[i * 2 + 1];
+				cv::line(copyImage2, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 3);
 			}
 		
 		}
-		cv::imwrite("ext.jpg", copyImage);
+		cv::imwrite("directions.jpg", copyImage2);
 
-		/*
-		for (int i = 0; i < 100; i++) {
-			cv::Mat copyImage = image.clone();
-			vector<uint> bla = PolygonsVector[i];
-			uint index1 = bla[0];
-			uint index2 = bla[1];
-			uint index3 = bla[2];
-			uint index4 = bla[3];
-			
-			cv::Point3f B_1 = ExtendedLinesVector[index1 * 2];
-			cv::Point3f E_1 = ExtendedLinesVector[index1 * 2 + 1];
-			cv::Point3f B_2 = ExtendedLinesVector[index2 * 2];
-			cv::Point3f E_2 = ExtendedLinesVector[index2 * 2 + 1];
-			cv::Point3f B_3 = ExtendedLinesVector[index3 * 2];
-			cv::Point3f E_3 = ExtendedLinesVector[index3 * 2 + 1];
-			cv::Point3f B_4 = ExtendedLinesVector[index4 * 2];
-			cv::Point3f E_4 = ExtendedLinesVector[index4 * 2 + 1];
-
-			vector<cv::Point> tempVec = { cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y) };
-			
-			const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
-			cv::fillConvexPoly(copyImage, &tempVec[0], 4, blaColor);
-			//cv::line(copyImage, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 5);
-			//cv::line(copyImage, cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), blaColor, 5);
-			//cv::line(copyImage, cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), blaColor, 5);
-			//cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
-			cv::imwrite("polygons_" + std::to_string(i) + ".jpg", copyImage);
-		}
+		
 		cv::Mat copyImage = image.clone();
 		for (int i = 0; i < PolygonsVector.size(); i++) {
 			vector<uint> bla = PolygonsVector[i];
@@ -1228,6 +1217,7 @@ int main()
 			//cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
 		}
 		cv::imwrite("all_polygons.jpg", copyImage);
+
 		cv::Mat secondImage = image.clone();
 		for (int i = 0; i < PolygonsVector.size(); i++) {
 			vector<uint> bla = PolygonsVector[i];
@@ -1261,7 +1251,7 @@ int main()
 			//cv::line(copyImage, cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), blaColor, 5);
 			//cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
 		}
-		cv::imwrite("normals.jpg", secondImage);*/
+		cv::imwrite("normals.jpg", secondImage);
 	}
 	system("pause");
 	return 0;
