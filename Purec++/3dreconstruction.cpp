@@ -1,6 +1,7 @@
 ﻿//C++ Includes
 #include <iostream>
 #include <vector>
+#include <unordered_map>
 #include <string>
 #include <algorithm>
 #include <time.h>
@@ -77,6 +78,16 @@ double* DoLSD(cv::Mat image, int& numLines)
 	write_eps(outArray, numLinesDetected, 7, "lsd.eps", image.cols, image.rows, 0);
 	return outArray;
 }
+
+class Line {
+	public:
+		cv::Point3f begin;
+		cv::Point3f end;
+		Line(cv::Point3f a, cv::Point3f b) {
+			begin = a;
+			end = b;
+		}
+};
 
 class PairOfTwoLines {
 	public:
@@ -446,6 +457,119 @@ void ExtendLines(int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vecto
 	ExtendedLinesVector.push_back(cv::Point3f(maxX, maxY, 0));
 }
 
+void ExtendLinesNew(vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f>& ExtendedLinesVector, double threshold, int maxX, int maxY) {
+	int numLinesDetected = LsdLinesVector.size() / 2;
+	unordered_map<int, Line> data;
+	vector<int> ids;
+	unordered_map<cv::Point3f, int*> connections;
+
+	for (int i = 0; i < numLinesDetected; i++) {
+		Line myLine = Line(LsdLinesVector[2*i], LsdLinesVector[2*i+1]);
+		ids.push_back(i);
+		data[i] = myLine;
+		
+		int* ptr = &ids[i];
+		connections[LsdLinesVector[2 * i]] = ptr;
+		connections[LsdLinesVector[2 * i + 1]] = ptr;
+	}
+
+	cv::Octree mainTree = cv::Octree(LsdLinesVector);
+	for (int k = 0; k < LsdLinesVector.size() / 2; k++) { //не совсем разобрался как сделать рекурсию, так что как временная заплатка - это N линейных проходов
+		for (int i = 0; i < LsdLinesVector.size(); i++) {
+			cv::Point3f currentPoint = LsdLinesVector[i];
+			Line thisLine = data[*connections[currentPoint]];
+
+			if (currentPoint == thisLine.begin || currentPoint == thisLine.end) { //если точка не внутренняя
+				cv::Vec3f currentLine = thisLine.end - thisLine.begin;
+				double currentLength = cv::norm(currentLine);
+				cv::Vec3f normalizedCurrentLine;
+				cv::normalize(currentLine, normalizedCurrentLine);
+
+				vector<cv::Point3f> foundPoints;
+				mainTree.getPointsWithinSphere(currentPoint, 10, foundPoints);
+				double bestDifference = threshold;
+
+				for (int j = 0; j < foundPoints.size(); j++)
+				{
+					cv::Point3f newPoint = foundPoints[j];
+					if (newPoint != currentPoint) //Проверяем, что нашли точку другой линии
+					{
+						Line foundLine = data[*connections[newPoint]];
+						if (newPoint == foundLine.begin || newPoint == foundLine.end) { //если точка не внутренняя
+
+							vector<cv::Point3f> temporaryPoints;
+							temporaryPoints.push_back(thisLine.begin);
+							temporaryPoints.push_back(thisLine.end);
+							temporaryPoints.push_back(foundLine.begin);
+							temporaryPoints.push_back(foundLine.end);
+							sort(temporaryPoints.begin(), temporaryPoints.end(), [&](cv::Point3f& a, cv::Point3f& b){
+								return a.x < b.x;
+							});
+
+							cv::Vec3f newLine;
+							newLine = temporaryPoints[3] - temporaryPoints[0]; //построили вектор новой линии (начало - самая левая из четырех точек, конец - самая правая из четырех точек)
+							double newLength = cv::norm(newLine);
+							if (newLength != currentLength) //Если длины разные, то будем нормализовать
+							{
+								cv::Vec3f normalizedNewLine;
+								cv::normalize(newLine, normalizedNewLine);
+								cv::Vec3f difference = normalizedNewLine - normalizedCurrentLine;
+								double diffLength = cv::norm(difference);
+								if (diffLength <= bestDifference) //Если отклонение лучше предыдущего, то будем продлевать
+								{
+									bestDifference = diffLength;
+									ids[*connections[currentPoint]] = *connections[newPoint];
+									data[*connections[newPoint]] = Line(temporaryPoints[0], temporaryPoints[3]);
+								}
+							}
+							else
+							{
+								cv::Vec3f difference = newLine - currentLine;
+								double diffLength = cv::norm(difference);
+								if (diffLength <= bestDifference)
+								{
+									bestDifference = diffLength;
+									ids[*connections[currentPoint]] = *connections[newPoint];
+									data[*connections[newPoint]] = Line(temporaryPoints[0], temporaryPoints[3]);
+								}
+							}
+						}
+
+					}
+				}
+			}
+		}
+	}
+
+	//Собираем урожай
+	for (int i = 0; i < ids.size(); i++) {
+		int index = i;
+		int value = ids[index];
+		while (value != index) {
+			index = value;
+			value = ids[index];
+		}
+		if (value == index) {
+			Line line = data[value];
+			ExtendedLinesVector.push_back(line.begin);
+			ExtendedLinesVector.push_back(line.end);
+		}
+	}
+
+	//Добавляем границы кадра как линии
+	ExtendedLinesVector.push_back(cv::Point3f(0, 0, 0));
+	ExtendedLinesVector.push_back(cv::Point3f(0, maxY, 0));
+
+	ExtendedLinesVector.push_back(cv::Point3f(maxX, 0, 0));
+	ExtendedLinesVector.push_back(cv::Point3f(maxX, maxY, 0));
+
+	ExtendedLinesVector.push_back(cv::Point3f(0, 0, 0));
+	ExtendedLinesVector.push_back(cv::Point3f(maxX, 0, 0));
+
+	ExtendedLinesVector.push_back(cv::Point3f(0, maxY, 0));
+	ExtendedLinesVector.push_back(cv::Point3f(maxX, maxY, 0));
+}
+
 void getVanishingPoints(double alpha, double beta, double f, vector<cv::Point3f>& output) {
 
 	double kArray[3][3] = { { f, 0, 0 }, { 0, f, 0 }, { 0, 0, 1 } };
@@ -715,7 +839,6 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 	cout << "Found number of polygons: " << PolygonsVector.size() << endl;
 }
 
-//Надо переделать
 void getNumbersOfPixels(cv::Mat image, vector<vector<uint>> PolygonsVector, int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, vector<int>& NumberOfPixelsInArea) {
 	for (int i = 0; i < PolygonsVector.size(); i++) {
 		int counter = 0;
@@ -736,19 +859,14 @@ void getNumbersOfPixels(cv::Mat image, vector<vector<uint>> PolygonsVector, int 
 		cv::Point3f B_4 = ExtendedLinesVector[index4 * 2];
 		cv::Point3f E_4 = ExtendedLinesVector[index4 * 2 + 1];
 
-		vector<cv::Point> tempVec = { cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y) };
-
-		const cv::Scalar blaColor = cv::Scalar(74, 184, 72, 255);
-		cv::fillConvexPoly(copyImage, &tempVec[0], 4, blaColor);
-
-		for (int x = 0; x < copyImage.cols; x++) {
-			for (int y = 0; y < copyImage.rows; y++) {
-				cv::Vec3b color = copyImage.at<cv::Vec3b>(cv::Point(x, y));
-				if (color[0] == 74 && color[1] == 184 && color[2] == 72) {
-					counter++;
-				}
-			}
-		}
+		double side1 = cv::norm(E_1 - B_1);
+		double side2 = cv::norm(E_2 - B_2);
+		double side3 = cv::norm(E_3 - B_3);
+		double side4 = cv::norm(E_4 - B_4);
+		
+		double p = (side1 + side2 + side3 + side4) / 2;
+		double result = sqrt((p - side1)*(p - side2)*(p - side3)*(p - side4));
+		counter = RoundTo(result);
 		NumberOfPixelsInArea.push_back(counter);
 	}
 }
@@ -804,7 +922,7 @@ double DirectionScore(vector<uint> lines, uint direction, int numLinesDetected, 
 	return result;
 }
 
-double dataCost(vector<uint> lines, uint direction, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, int Warea) {
+double dataCost(vector<uint> lines, uint direction, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, double Warea) {
 	double result = 0;
 	if (direction == 0) {
 		result = -Warea*(DirectionScore(lines, 1, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 2, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines) + DirectionScore(lines, 5, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines));
@@ -858,7 +976,7 @@ double EnergyFunction(vector<uint> PlaneNormals, int numLinesDetected, vector<cv
 	for (int i = 0; i < PolygonsVector.size(); i++) {
 		vector<uint> lines = PolygonsVector[i];
 		uint normalDirection = PlaneNormals[i];
-		uint Warea = NumberOfPixelsInArea[i];
+		double Warea = 1 + (double)NumberOfPixelsInArea[i]/100;
 		dataCostValue += dataCost(lines, normalDirection, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, Warea);
 		for (int j = i; j < PolygonsVector.size(); j++) {
 			if (i != j && PolygonIntersections[i][j] == 1) {
@@ -1039,8 +1157,8 @@ int main()
 	srand(time(0)); //чтобы последовательность рандомных чисел была всегда уникальна при новом запуске
 	
 	//Переменные для настройки
-	double focal_length = 4; //фокальное расстояние в mm
-	double sensor_width = 4.59; //ширина сенсора в mm
+	double focal_length = 47; //фокальное расстояние в mm
+	double sensor_width = 35; //ширина сенсора в mm
 	double ExtendThreshold = 0.01; //порог отклонения линии (для удлинения)
 	double countInlierThreshold = 0.0001; //если квадрат скалярного произведения двух линий меньше этого числа, то мы считаем эти линии ортогональными
 	
@@ -1049,7 +1167,7 @@ int main()
 	double radius = 20; //радиус поиска около точек соединительных линий
 	
 	uint ResizeIfMoreThan = 2000; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
-	bool debug = 1;
+	bool debug = 0;
 	
 	//Открытие изображения
 	cv::Mat image;
@@ -1122,7 +1240,7 @@ int main()
 	vector<vector<uint>> PolygonsVector;
 	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector);
 
-	
+	/*
 	//Смотрим сколько пикселей в каждой области
 	vector<int> NumbersOfPixelsInArea;
 	getNumbersOfPixels(image, PolygonsVector, numLinesDetected, ExtendedLinesVector, NumbersOfPixelsInArea);
@@ -1143,15 +1261,8 @@ int main()
 	//Получаем нормали
 	vector<uint> PlaneNormals;
 	getNormals(PlaneNormals, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, NumbersOfPixelsInArea, PolygonIntersections);
-
-
-
-
-
-
-
-
-
+	*/
+	
 	//Запись в файл для дебага
 	if (debug) {
 		write_eps(LsdLinesArray, numLinesDetected, 7, "lsd_lines.eps", maxX, maxY, 1);
@@ -1166,8 +1277,19 @@ int main()
 			ExtendedLinesArray[7 * i + 6] = 15;
 		}
 		write_eps(ExtendedLinesArray, numLinesDetected, 7, "extended_lines.eps", maxX, maxY, 1);
+
+		cv::Mat copyImage3 = image.clone();
+		for (int i = 0; i < numLinesDetected; i++) {
+			cv::Point3f B_1 = ExtendedLinesVector[2 * i];
+			cv::Point3f E_1 = ExtendedLinesVector[2 * i + 1];
+			const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
+			cv::line(copyImage3, cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), blaColor, 3);
+			cv::circle(copyImage3, cv::Point(B_1.x, B_1.y), 7, blaColor, -1);
+			cv::circle(copyImage3, cv::Point(E_1.x, E_1.y), 7, blaColor, -1);
+		}
+		cv::imwrite("lines_all.jpg", copyImage3);
 		
-		cv::Mat copyImage2 = cv::imread("test.jpg");
+		cv::Mat copyImage2 = image.clone();
 		for (int i = 0; i < numLinesDetected; i++) {
 			
 			if (DirectionsOfLines[i] == 0) {
@@ -1192,7 +1314,7 @@ int main()
 		}
 		cv::imwrite("directions.jpg", copyImage2);
 
-		
+		/*
 		cv::Mat copyImage = image.clone();
 		for (int i = 0; i < PolygonsVector.size(); i++) {
 			vector<uint> bla = PolygonsVector[i];
@@ -1217,7 +1339,7 @@ int main()
 			//cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
 		}
 		cv::imwrite("all_polygons.jpg", copyImage);
-
+		
 		cv::Mat secondImage = image.clone();
 		for (int i = 0; i < PolygonsVector.size(); i++) {
 			vector<uint> bla = PolygonsVector[i];
@@ -1251,7 +1373,7 @@ int main()
 			//cv::line(copyImage, cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), blaColor, 5);
 			//cv::line(copyImage, cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y), blaColor, 5);
 		}
-		cv::imwrite("normals.jpg", secondImage);
+		cv::imwrite("normals.jpg", secondImage);*/
 	}
 	system("pause");
 	return 0;
