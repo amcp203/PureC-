@@ -87,6 +87,10 @@ class Line {
 			begin = a;
 			end = b;
 		}
+		Line() {
+			begin = cv::Point3f(0, 0, 0);
+			end = cv::Point3f(0, 0, 0);
+		}
 };
 
 class PairOfTwoLines {
@@ -457,27 +461,50 @@ void ExtendLines(int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vecto
 	ExtendedLinesVector.push_back(cv::Point3f(maxX, maxY, 0));
 }
 
+//http://stackoverflow.com/questions/16792751/hashmap-for-2d3d-coordinates-i-e-vector-of-doubles
+struct hashFunc{
+	size_t operator()(const cv::Point3f &k) const{
+		size_t h1 = hash<float>()(k.x);
+		size_t h2 = hash<float>()(k.y);
+		size_t h3 = hash<float>()(k.z);
+		return (h1 ^ (h2 << 1)) ^ h3;
+	}
+};
+
+struct equalsFunc{
+	bool operator()(const cv::Point3f& lhs, const cv::Point3f& rhs) const{
+		return (lhs.x == rhs.x) && (lhs.y == rhs.y) && (lhs.z == rhs.z);
+	}
+};
+
 void ExtendLinesNew(vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f>& ExtendedLinesVector, double threshold, int maxX, int maxY) {
 	int numLinesDetected = LsdLinesVector.size() / 2;
 	unordered_map<int, Line> data;
 	vector<int> ids;
-	unordered_map<cv::Point3f, int*> connections;
+	unordered_map<cv::Point3f, int*, hashFunc, equalsFunc> connections;
 
 	for (int i = 0; i < numLinesDetected; i++) {
-		Line myLine = Line(LsdLinesVector[2*i], LsdLinesVector[2*i+1]);
+		cv::Point3f one = LsdLinesVector[2 * i];
+		cv::Point3f two = LsdLinesVector[2 * i + 1]; 
+
 		ids.push_back(i);
+		Line myLine = Line(one, two);
 		data[i] = myLine;
 		
 		int* ptr = &ids[i];
-		connections[LsdLinesVector[2 * i]] = ptr;
-		connections[LsdLinesVector[2 * i + 1]] = ptr;
+		connections[one] = ptr;
+		connections[two] = ptr;
 	}
 
 	cv::Octree mainTree = cv::Octree(LsdLinesVector);
-	for (int k = 0; k < LsdLinesVector.size() / 2; k++) { //не совсем разобрался как сделать рекурсию, так что как временная заплатка - это N линейных проходов
+	for (int k = 0; k < LsdLinesVector.size() / 2; k++) { //не совсем разобрался как сделать рекурсию, так что K проходов
 		for (int i = 0; i < LsdLinesVector.size(); i++) {
 			cv::Point3f currentPoint = LsdLinesVector[i];
+			cout << "currentPoint: " << currentPoint << endl;
 			Line thisLine = data[*connections[currentPoint]];
+			cout << "id: " << *connections[currentPoint] << endl;
+
+			cout << "thisLine: " << thisLine.begin << " ; " << thisLine.end << endl;
 
 			if (currentPoint == thisLine.begin || currentPoint == thisLine.end) { //если точка не внутренняя
 				cv::Vec3f currentLine = thisLine.end - thisLine.begin;
@@ -1157,8 +1184,8 @@ int main()
 	srand(time(0)); //чтобы последовательность рандомных чисел была всегда уникальна при новом запуске
 	
 	//Переменные для настройки
-	double focal_length = 47; //фокальное расстояние в mm
-	double sensor_width = 35; //ширина сенсора в mm
+	double focal_length = 4; //фокальное расстояние в mm
+	double sensor_width = 4.59; //ширина сенсора в mm
 	double ExtendThreshold = 0.01; //порог отклонения линии (для удлинения)
 	double countInlierThreshold = 0.0001; //если квадрат скалярного произведения двух линий меньше этого числа, то мы считаем эти линии ортогональными
 	
@@ -1222,6 +1249,10 @@ int main()
 	vector<PairOfTwoLines> LinePairsVector; //в каждом элементе этого вектора лежит два индекса (линий, которые пересекаются)
 	ExtendLines(numLinesDetected, LsdLinesVector, ExtendedLinesVector, LinePairsVector, ExtendThreshold, maxX, maxY);
 	cout << "Number of line pairs: " << LinePairsVector.size() << endl;
+
+	
+	vector<cv::Point3f> ExtTest;
+	ExtendLinesNew(LsdLinesVector, ExtTest, ExtendThreshold, maxX, maxY);
 	
 	//RANSAC (находим углы альфа и бэта)
 	uint maxRansacTrials = (uint)LinePairsVector.size(); //максимальное количество итерация алгоритма RANSAC
@@ -1277,6 +1308,19 @@ int main()
 			ExtendedLinesArray[7 * i + 6] = 15;
 		}
 		write_eps(ExtendedLinesArray, numLinesDetected, 7, "extended_lines.eps", maxX, maxY, 1);
+
+		
+		double * ExtendedLines = (double *)malloc(maxX * maxY * sizeof(double));
+		for (int i = 0; i < numLinesDetected; i++) {
+			ExtendedLines[7 * i] = ExtTest[2 * i].x;
+			ExtendedLines[7 * i + 1] = ExtTest[2 * i].y;
+			ExtendedLines[7 * i + 2] = ExtTest[2 * i + 1].x;
+			ExtendedLines[7 * i + 3] = ExtTest[2 * i + 1].y;
+			ExtendedLines[7 * i + 4] = 1;
+			ExtendedLines[7 * i + 5] = 0.125;
+			ExtendedLines[7 * i + 6] = 15;
+		}
+		write_eps(ExtendedLines, ExtTest.size() / 2, 7, "extended_lines11.eps", maxX, maxY, 1);
 
 		cv::Mat copyImage3 = image.clone();
 		for (int i = 0; i < numLinesDetected; i++) {
