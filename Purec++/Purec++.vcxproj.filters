@@ -18,8 +18,16 @@
     <ClCompile Include="3dreconstruction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="lsd.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
+    <ClInclude Include="lsd.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="boolinq.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
