@@ -150,11 +150,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="3dreconstruction.cpp" />
-    <ClCompile Include="lsd.cpp" />
+    <ClCompile Include="lsd\lsd.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="boolinq.h" />
-    <ClInclude Include="lsd.h" />
+    <ClInclude Include="boolinq\boolinq.h" />
+    <ClInclude Include="lsd\lsd.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

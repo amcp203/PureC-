@@ -18,8 +18,8 @@ typedef uint32_t uint;
 //Чтобы использовать find_min_bobyqa
 #include "dlib/optimization.h"
 //LSD
-#include "lsd.h"
-#include "boolinq.h"
+#include "lsd/lsd.h"
+#include "boolinq/boolinq.h"
 using namespace std;
 
 //Записывает LSD линии в файл .eps
@@ -303,7 +303,7 @@ dlib::matrix<double, 0, 1> RANSAC(uint maxTrials, double threshold, double f, ve
 	return bestSolution;
 }
 
-void ExtendLines(int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f>& ExtendedLinesVector, vector<PairOfTwoLines>& LinePairsVector, double threshold, int maxX, int maxY) {
+void ExtendLines1(int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f>& ExtendedLinesVector, vector<PairOfTwoLines>& LinePairsVector, double threshold, int maxX, int maxY) {
 	cv::Octree mainTree = cv::Octree(LsdLinesVector);
 	for(int i = 0; i < numLinesDetected; i++) {
 		cv::Point3f beginPoint = LsdLinesVector[2 * i];
@@ -1015,80 +1015,71 @@ void getNormals(vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Poi
 	}
 }
 
+void ShowLSDLinesOnScreen(cv::Mat image, vector<Line> LSDLines) {
+	int kk = 0;
+	cv::Mat debi2 = image.clone();
+	cv::cvtColor(debi2, debi2, CV_BGR2GRAY);
+	cv::cvtColor(debi2, debi2, CV_GRAY2BGR);
+	for(auto & l : LSDLines) {
+		auto id = to_string(kk++);
+		const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
+		auto begin = cv::Point(l.begin.x, l.begin.y);
+		auto end = cv::Point(l.end.x, l.end.y);
+		cv::line(debi2, begin, end, blaColor, 3);
+		cv::circle(debi2, begin, 7, blaColor, -1);
+		cv::putText(debi2, "<" + id, begin, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.5, CV_RGB(0, 0, 0), 1.5);
+		cv::circle(debi2, end, 7, blaColor, -1);
+		cv::putText(debi2, ">", end, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.5, CV_RGB(0, 0, 0), 1.5);
+	}
+	cv::imshow("LSD_Lines", debi2);
+	cv::waitKey(0);
+	cv::destroyWindow("LSD_Lines");
+}
 
-int main() {
-	clock_t tStart = clock();
-	srand(time(0)); //чтобы последовательность рандомных чисел была всегда уникальна при новом запуске
+void ShowLineAtIterationStep(cv::Mat image, vector<int> indices, vector<cv::Point3f> beggienings, vector<cv::Point3f> endings, Line lineToJoin, Line l) {
+	cv::Mat debi1 = image.clone();
+	cv::cvtColor(debi1, debi1, CV_BGR2GRAY);
+	cv::cvtColor(debi1, debi1, CV_GRAY2BGR);
 
-	//Переменные для настройки
-	double focal_length = 4; //фокальное расстояние в mm
-	double sensor_width = 4.59; //ширина сенсора в mm
-	double ExtendThreshold = 0.01; //порог отклонения линии (для удлинения)
-	double countInlierThreshold = 0.0001; //если квадрат скалярного произведения двух линий меньше этого числа, то мы считаем эти линии ортогональными
-
-	double AngleTolerance = 0.0001; //если abs(tg(angle1) - tg(angle2)) < AngleTolerance, то эти две линии объединяются в одну группу (параллельных линий с некоторой степенью толерантности)
-	double step = 6; //шаг для дискритизации линий
-	double radius = 20; //радиус поиска около точек соединительных линий
-
-	uint ResizeIfMoreThan = 2000; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
-	bool debug = 1;
-
-	//Открытие изображения
-	cv::Mat image;
-	image = cv::imread("test.png", CV_LOAD_IMAGE_COLOR);
-
-	//Изменение размера
-	uint maxRes = max(image.cols, image.rows);
-	if(maxRes > ResizeIfMoreThan) {
-		float scaleFactor = float(ResizeIfMoreThan) / maxRes;
-		cv::Size size = cv::Size(image.cols * scaleFactor, image.rows * scaleFactor);
-		cv::resize(image, image, size);
+	const cv::Scalar c1 = cv::Scalar(255, 0, 255, 255);
+	const cv::Scalar c2 = cv::Scalar(255, 100, 10, 255);
+	const cv::Scalar c3 = cv::Scalar(0, 200, 255, 255);
+	for(auto i : indices) {
+		cv::circle(debi1, cv::Point(beggienings[i].x, beggienings[i].y), 5, c2, -1);
+		cv::line(debi1, cv::Point(beggienings[i].x, beggienings[i].y), cv::Point(endings[i].x, endings[i].y), c2, 2);
 	}
 
-	//Границы кадра
-	uint maxX = image.cols;
-	uint maxY = image.rows;
+	cv::line(debi1, cv::Point(l.begin.x, l.begin.y), cv::Point(l.end.x, l.end.y), c1, 2);
+	cv::circle(debi1, cv::Point(l.end.x, l.end.y), 5, c1, -1);
+	cv::line(debi1, cv::Point(lineToJoin.begin.x, lineToJoin.begin.y), cv::Point(lineToJoin.end.x, lineToJoin.end.y), c3, 1);
 
-	//Фокальное расстояние
-	double temp_focal = maxX * focal_length / sensor_width;
-	uint f = (uint)temp_focal; //фокальное расстояние в пикселях
+	cv::imshow("Iteration_Step", debi1);
+	cv::waitKey(0);
+	cv::destroyWindow("Iteration_Step");
+}
 
-	//LSD
-	int numLinesDetected;
-	double* LsdLinesArray = DoLSD(image, numLinesDetected);
-	cout << "Number of LSD lines detected: " << numLinesDetected << endl;
+void ShowJoinedLines(cv::Mat image, unordered_map<int, Line> lines) {
+	cv::Mat copyImage3 = image.clone();
+	for(auto & p : lines) {
+		auto & l = p.second;
+		auto id = to_string(p.first);
+		const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
+		auto begin = cv::Point(l.begin.x, l.begin.y);
+		auto end = cv::Point(l.end.x, l.end.y);
+		cv::line(copyImage3, begin, end, blaColor, 3);
+		cv::circle(copyImage3, begin, 7, blaColor, -1);
+		cv::putText(copyImage3, "<" + id, begin, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.6, CV_RGB(0, 0, 0), 1.5);
+		cv::circle(copyImage3, end, 7, blaColor, -1);
+		cv::putText(copyImage3, id + ">", end, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.6, CV_RGB(0, 0, 0), 1.5);
 
-	//Копируем точки из массива в вектор с учетом порядка
-	vector<cv::Point3f> LsdLinesVector; //элемент с номером 2*i дает нам точку начала i-ой линии, элемент с номером 2*i + 1 дает нам точку конца i-ой линии
-	for(int i = 0; i < numLinesDetected; i++) {
-		double x1 = RoundTo(LsdLinesArray[7 * i]);
-		double y1 = RoundTo(LsdLinesArray[7 * i + 1]);
-		double x2 = RoundTo(LsdLinesArray[7 * i + 2]);
-		double y2 = RoundTo(LsdLinesArray[7 * i + 3]);
-		cv::Point3f point_one = cv::Point3f(x1, y1, 0);
-		cv::Point3f point_two = cv::Point3f(x2, y2, 0);
-		if(x1 < x2) { // todo use epsilon!
-			LsdLinesVector.push_back(point_one);
-			LsdLinesVector.push_back(point_two);
-		} else if(x1 < x2) {
-			LsdLinesVector.push_back(point_two);
-			LsdLinesVector.push_back(point_one);
-		} else if(y1 < y2) {
-			LsdLinesVector.push_back(point_one);
-			LsdLinesVector.push_back(point_two);
-		} else {
-			LsdLinesVector.push_back(point_two);
-			LsdLinesVector.push_back(point_one);
-		}
-		auto & a(LsdLinesVector[i * 2 + 1]);
-		auto & b(LsdLinesVector[i * 2]);
-		auto dir = a.y - b.y;
-		dir /= abs(dir);
-		a.z = dir;
-		b.z = dir;
 	}
+	//cv::imwrite("lines_all.jpg", copyImage3);
+	cv::imshow("AllJoinedLines", copyImage3);
+	cv::waitKey(0);
+	cv::destroyWindow("AllJoinedLines");
+}
 
-
+void ExtendLines(cv::Mat image, vector<cv::Point3f> LsdLinesVector, unordered_map<int, Line> &lines) {
 	/// Present
 	//todo: split into ~3 line long seprate member functions
 	// Sorted left->right lines layer
@@ -1101,25 +1092,8 @@ int main() {
 		return result;
 	}(LsdLinesVector);
 
-	///DEBUG
-	int kk = 0;
-	cv::Mat debi2 = image.clone();
-	cv::cvtColor(debi2, debi2, CV_BGR2GRAY);
-	cv::cvtColor(debi2, debi2, CV_GRAY2BGR);
-	for(auto & l : LSDLines) {
-		auto id = to_string(kk++);
-		const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
-		auto begin = cv::Point(l.begin.x, l.begin.y);
-		auto end = cv::Point(l.end.x, l.end.y);
-		cv::line(debi2, begin, end, blaColor, 3);
-		cv::circle(debi2, begin, 7, blaColor, -1);
-		cv::putText(debi2, "<" +id, begin, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.5, CV_RGB(0, 0, 0), 1.5);
-		cv::circle(debi2, end, 7, blaColor, -1);
-		cv::putText(debi2, ">", end, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.5, CV_RGB(0, 0, 0), 1.5);
-	}
-	cv::imshow("debug", debi2);
-	cv::waitKey(0);
-	cv::destroyWindow("debug");
+	///DEBUG_BEGIN
+	ShowLSDLinesOnScreen(image, LSDLines);
 	///DEBUG_END
 
 
@@ -1178,36 +1152,17 @@ int main() {
 			LSDLines[lineToJoin.index].index = l.index; //cant change LINQ copy
 		}
 
-		//Debug
-		cv::Mat debi1 = image.clone();
-		cv::cvtColor(debi1, debi1, CV_BGR2GRAY);
-		cv::cvtColor(debi1, debi1, CV_GRAY2BGR);
-
-		const cv::Scalar c1 = cv::Scalar(255, 0, 255, 255);
-		const cv::Scalar c2 = cv::Scalar(255, 100, 10, 255);
-		const cv::Scalar c3 = cv::Scalar(0, 200, 255, 255);
-		for(auto i : indices) {
-			cv::circle(debi1, cv::Point(beggienings[i].x, beggienings[i].y), 5, c2, -1);
-			cv::line(debi1, cv::Point(beggienings[i].x, beggienings[i].y), cv::Point(endings[i].x, endings[i].y), c2, 2);
-		}
-
-		cv::line(debi1, cv::Point(l.begin.x, l.begin.y), cv::Point(l.end.x, l.end.y), c1, 2);
-		cv::circle(debi1, cv::Point(l.end.x, l.end.y), 5, c1, -1);
-		cv::line(debi1, cv::Point(lineToJoin.begin.x, lineToJoin.begin.y), cv::Point(lineToJoin.end.x, lineToJoin.end.y), c3, 1);
-
-		cv::imshow("debug", debi1);
-		cv::waitKey(0);
-		cv::destroyWindow("debug");
-		//EndDebug
+		///DEBUG_BEGIN
+		ShowLineAtIterationStep(image, indices, beggienings, endings, lineToJoin, l);
+		///DEBUG_END
 	}
 
 	// correction step
-	std::unordered_map<int, Line> lines;
 	for(auto &l : LSDLines) {
 		auto & line(lines[l.index]);
 		if(line.index == -1) {
 			line = l;
-		} else { // Todo chect vertical line grouth!
+		} else { // Todo check vertical line grouth!
 			if(line.begin.x < l.begin.x) {
 				line.begin = l.begin;
 			}
@@ -1217,33 +1172,147 @@ int main() {
 			}
 		}
 	}
+}
 
-	cv::Mat copyImage3 = image.clone();
-	for(auto & p : lines) {
-		auto & l = p.second;
-		auto id = to_string(p.first);
-		const cv::Scalar blaColor = cv::Scalar(RandomInt(0, 255), RandomInt(0, 255), RandomInt(0, 255), 255);
-		auto begin = cv::Point(l.begin.x, l.begin.y);
-		auto end = cv::Point(l.end.x, l.end.y);
-		cv::line(copyImage3, begin, end, blaColor, 3);
-		cv::circle(copyImage3, begin, 7, blaColor, -1);
-		cv::putText(copyImage3, "<" + id, begin, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.6, CV_RGB(0, 0, 0), 1.5);
-		cv::circle(copyImage3, end, 7, blaColor, -1);
-		cv::putText(copyImage3, id + ">", end, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.6, CV_RGB(0, 0, 0), 1.5);
+///INTERSECTION_DETECTION_BEGIN
+double crossProduct(cv::Point3f a, cv::Point3f b) {
+	return a.x * b.y - b.x * a.y;
+}
 
+bool doBoundingBoxesIntersect(Line a, Line b) {
+	return a.begin.x <= b.end.x && a.end.x >= b.begin.x && a.begin.y <= b.end.y
+		&& a.end.y >= b.begin.y;
+}
+
+bool isPointOnLine(Line a, cv::Point3f b, double EPSILON) {
+	Line aTmp = Line(cv::Point3f(0, 0, 0), cv::Point3f(
+		a.end.x - a.begin.x, a.end.y - a.begin.y, 0));
+	cv::Point3f bTmp = cv::Point3f(b.x - a.begin.x, b.y - a.begin.y, 0);
+	double r = crossProduct(aTmp.end, bTmp);
+	return abs(r) < EPSILON;
+}
+
+bool isPointRightOfLine(Line a, cv::Point3f b) {
+	Line aTmp = Line(cv::Point3f(0, 0, 0), cv::Point3f(
+		a.end.x - a.begin.x, a.end.y - a.begin.y, 0));
+	cv::Point3f bTmp = cv::Point3f(b.x - a.begin.x, b.y - a.begin.y, 0);
+	return crossProduct(aTmp.end, bTmp) < 0;
+}
+
+bool lineSegmentTouchesOrCrossesLine(Line a, Line b, double EPSILON) {
+	return isPointOnLine(a, b.begin, EPSILON)
+		|| isPointOnLine(a, b.end, EPSILON)
+		|| (isPointRightOfLine(a, b.begin) ^ isPointRightOfLine(a,
+			b.end));
+}
+
+bool doLinesIntersect(Line a, Line b, double EPSILON) {
+	return doBoundingBoxesIntersect(a, b)
+		&& lineSegmentTouchesOrCrossesLine(a, b, EPSILON)
+		&& lineSegmentTouchesOrCrossesLine(b, a, EPSILON);
+}
+
+void getLinePairs(unordered_map<int, Line> lines, vector<PairOfTwoLines> outputVec) {
+	double EPSILON = 0.000001;
+	for(auto & firstLine : lines) {
+		for(auto & secondLine : lines) {
+			if (doLinesIntersect(firstLine.second, secondLine.second, EPSILON)) {
+				PairOfTwoLines tempPair = PairOfTwoLines(firstLine.first, secondLine.first);
+				outputVec.push_back(tempPair);
+			}
+		}
 	}
-	//cv::imwrite("lines_all.jpg", copyImage3);
-	cv::imshow("lines_all", copyImage3);
-	cv::waitKey(0);
-	cv::destroyWindow("lines_all");
+}
+///INTERSECTION_DETECTION_END
+
+int main() {
+	clock_t tStart = clock();
+	srand(time(0)); //чтобы последовательность рандомных чисел была всегда уникальна при новом запуске
+
+	//Переменные для настройки
+	double focal_length = 4; //фокальное расстояние в mm
+	double sensor_width = 4.59; //ширина сенсора в mm
+	double ExtendThreshold = 0.01; //порог отклонения линии (для удлинения)
+	double countInlierThreshold = 0.0001; //если квадрат скалярного произведения двух линий меньше этого числа, то мы считаем эти линии ортогональными
+
+	double AngleTolerance = 0.0001; //если abs(tg(angle1) - tg(angle2)) < AngleTolerance, то эти две линии объединяются в одну группу (параллельных линий с некоторой степенью толерантности)
+	double step = 6; //шаг для дискритизации линий
+	double radius = 20; //радиус поиска около точек соединительных линий
+
+	uint ResizeIfMoreThan = 2000; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
+	bool debug = 1;
+
+	//Открытие изображения
+	cv::Mat image;
+	image = cv::imread("test.png", CV_LOAD_IMAGE_COLOR);
+
+	//Изменение размера
+	uint maxRes = max(image.cols, image.rows);
+	if(maxRes > ResizeIfMoreThan) {
+		float scaleFactor = float(ResizeIfMoreThan) / maxRes;
+		cv::Size size = cv::Size(image.cols * scaleFactor, image.rows * scaleFactor);
+		cv::resize(image, image, size);
+	}
+
+	//Границы кадра
+	uint maxX = image.cols;
+	uint maxY = image.rows;
+
+	//Фокальное расстояние
+	double temp_focal = maxX * focal_length / sensor_width;
+	uint f = (uint)temp_focal; //фокальное расстояние в пикселях
+
+	//LSD
+	int numLinesDetected;
+	double* LsdLinesArray = DoLSD(image, numLinesDetected);
+	cout << "Number of LSD lines detected: " << numLinesDetected << endl;
+
+	//Копируем точки из массива в вектор с учетом порядка
+	vector<cv::Point3f> LsdLinesVector; //элемент с номером 2*i дает нам точку начала i-ой линии, элемент с номером 2*i + 1 дает нам точку конца i-ой линии
+	for(int i = 0; i < numLinesDetected; i++) {
+		double x1 = RoundTo(LsdLinesArray[7 * i]);
+		double y1 = RoundTo(LsdLinesArray[7 * i + 1]);
+		double x2 = RoundTo(LsdLinesArray[7 * i + 2]);
+		double y2 = RoundTo(LsdLinesArray[7 * i + 3]);
+		cv::Point3f point_one = cv::Point3f(x1, y1, 0);
+		cv::Point3f point_two = cv::Point3f(x2, y2, 0);
+		if(x1 < x2) { // todo use epsilon!
+			LsdLinesVector.push_back(point_one);
+			LsdLinesVector.push_back(point_two);
+		} else if(x2 < x1) {
+			LsdLinesVector.push_back(point_two);
+			LsdLinesVector.push_back(point_one);
+		} else if(y1 < y2) {
+			LsdLinesVector.push_back(point_one);
+			LsdLinesVector.push_back(point_two);
+		} else {
+			LsdLinesVector.push_back(point_two);
+			LsdLinesVector.push_back(point_one);
+		}
+		auto & a(LsdLinesVector[i * 2 + 1]);
+		auto & b(LsdLinesVector[i * 2]);
+		auto dir = a.y - b.y;
+		dir /= abs(dir);
+		a.z = dir;
+		b.z = dir;
+	}
+
+	unordered_map<int, Line> lines;
+	ExtendLines(image, LsdLinesVector, lines);
+
+	///DEBUG_BEGIN
+	ShowJoinedLines(image, lines);
+	///DEBUG_END
 
 	return 0;
+
+
 	/// Past
 	//Удлинение
 	vector<cv::Point3f> ExtendedLinesVector; //элемент с индексом 2*i дает нам точку начала i-ой линии, элемент с индексом 2*i + 1 дает нам точку конца i-ой линии
 	vector<PairOfTwoLines> LinePairsVector; //в каждом элементе этого вектора лежит два индекса (линий, которые пересекаются)
 
-	ExtendLines(numLinesDetected, LsdLinesVector, ExtendedLinesVector, LinePairsVector, ExtendThreshold, maxX, maxY);
+	ExtendLines1(numLinesDetected, LsdLinesVector, ExtendedLinesVector, LinePairsVector, ExtendThreshold, maxX, maxY);
 	cout << "Number of line pairs: " << LinePairsVector.size() << endl;
 
 

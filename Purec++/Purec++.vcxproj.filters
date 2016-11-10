@@ -18,15 +18,15 @@
     <ClCompile Include="3dreconstruction.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="lsd.cpp">
+    <ClCompile Include="lsd\lsd.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="lsd.h">
+    <ClInclude Include="lsd\lsd.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="boolinq.h">
+    <ClInclude Include="boolinq\boolinq.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

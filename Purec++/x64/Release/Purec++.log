@@ -1,9 +1,8 @@
 ﻿  3dreconstruction.cpp
-  lsd.cpp
   Создание кода
-  233 of 3363 functions ( 6.9%) were compiled, the rest were copied from previous compilation.
+  72 of 3424 functions ( 2.1%) were compiled, the rest were copied from previous compilation.
     0 functions were new in current compilation
-    22 functions had inline decision re-evaluated but remain unchanged
+    24 functions had inline decision re-evaluated but remain unchanged
   Создание кода завершено
   Purec++.vcxproj -> C:\PureC+\x64\Release\Purec++.exe
   Purec++.vcxproj -> C:\PureC+\x64\Release\Purec++.pdb (Full PDB)
