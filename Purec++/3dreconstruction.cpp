@@ -23,6 +23,79 @@ typedef uint32_t uint;
 #include "boolinq/boolinq.h"
 using namespace std;
 
+/**
+*  \brief Automatic brightness and contrast optimization with optional histogram clipping
+*  \param [in]src Input image GRAY or BGR or BGRA
+*  \param [out]dst Destination image
+*  \param clipHistPercent cut wings of histogram at given percent tipical=>1, 0=>Disabled
+*  \note In case of BGRA image, we won't touch the transparency
+*/
+void BrightnessAndContrastAuto(const cv::Mat &src, cv::Mat &dst, float clipHistPercent = 0) {
+
+	CV_Assert(clipHistPercent >= 0);
+	CV_Assert((src.type() == CV_8UC1) || (src.type() == CV_8UC3) || (src.type() == CV_8UC4));
+
+	int histSize = 256;
+	float alpha, beta;
+	double minGray = 0, maxGray = 0;
+
+	//to calculate grayscale histogram
+	cv::Mat gray;
+	if(src.type() == CV_8UC1) gray = src;
+	else if(src.type() == CV_8UC3) cvtColor(src, gray, CV_BGR2GRAY);
+	else if(src.type() == CV_8UC4) cvtColor(src, gray, CV_BGRA2GRAY);
+	if(clipHistPercent == 0) {
+		// keep full available range
+		cv::minMaxLoc(gray, &minGray, &maxGray);
+	} else {
+		cv::Mat hist; //the grayscale histogram
+
+		float range[] = {0, 256};
+		const float* histRange = {range};
+		bool uniform = true;
+		bool accumulate = false;
+		calcHist(&gray, 1, 0, cv::Mat(), hist, 1, &histSize, &histRange, uniform, accumulate);
+
+		// calculate cumulative distribution from the histogram
+		std::vector<float> accumulator(histSize);
+		accumulator[0] = hist.at<float>(0);
+		for(int i = 1; i < histSize; i++) {
+			accumulator[i] = accumulator[i - 1] + hist.at<float>(i);
+		}
+
+		// locate points that cuts at required value
+		float max = accumulator.back();
+		clipHistPercent *= (max / 100.0); //make percent as absolute
+		clipHistPercent /= 2.0; // left and right wings
+								// locate left cut
+		minGray = 0;
+		while(accumulator[minGray] < clipHistPercent)
+			minGray++;
+
+		// locate right cut
+		maxGray = histSize - 1;
+		while(accumulator[maxGray] >= (max - clipHistPercent))
+			maxGray--;
+	}
+
+	// current range
+	float inputRange = maxGray - minGray;
+
+	alpha = (histSize - 1) / inputRange;   // alpha expands current range to histsize range
+	beta = -minGray * alpha;             // beta shifts current range so that minGray will go to 0
+
+										 // Apply brightness and contrast normalization
+										 // convertTo operates with saurate_cast
+	src.convertTo(dst, -1, alpha, beta);
+
+	// restore alpha channel from source 
+	if(dst.type() == CV_8UC4) {
+		int from_to[] = {3, 3};
+		cv::mixChannels(&src, 4, &dst, 1, from_to, 1);
+	}
+	return;
+}
+
 //Записывает LSD линии в файл .eps
 void write_eps(double* segs, int n, int dim, char* filename, int xsize, int ysize, double width) {
 	FILE* eps;
@@ -60,7 +133,29 @@ void write_eps(double* segs, int n, int dim, char* filename, int xsize, int ysiz
 double* DoLSD(cv::Mat image, int& numLines) {
 	//Конвертация изображения для последующего применения алгоритма LSD
 	cv::Mat grayscaleMat(image.size(), CV_8U);
-	cv::cvtColor(image, grayscaleMat, CV_BGR2GRAY);
+	auto im = image.clone();
+	cv::cvtColor(im, grayscaleMat, CV_BGR2GRAY);
+	
+	
+	/////////////////////////
+	Canny(grayscaleMat, grayscaleMat, 50, 200, 3, true);
+	vector<cv::Vec4i> lines;
+	cv::HoughLinesP(grayscaleMat, lines, 1, CV_PI / 180, 50, 50, 10);
+	for(size_t i = 0; i < lines.size(); i++) {
+		cv::Vec4i l = lines[i];
+		auto begin = cv::Point(l[0], l[1]);
+		auto end = cv::Point(l[2], l[3]);
+		line(im, begin, end, cv::Scalar(0, 0, 255), 1, CV_AA);
+		cv::circle(im, begin, 3, cv::Scalar(0, 200, 0), -1);
+		cv::circle(im, end, 3, cv::Scalar(200, 0, 0), -1);
+	}
+	cout << "Hough Lines" << lines.size() << endl;
+	imshow("cany edges", grayscaleMat);
+
+	imshow("Hough Lines", im);
+	cv::waitKey(0);
+	/////////////////////////////////////////////
+
 	double* pgm_image;
 	pgm_image = (double *)malloc(image.cols * image.rows * sizeof(double));
 	for(int y = 0; y < image.rows; y++) {
@@ -381,7 +476,7 @@ void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVec
 	}
 }
 
-void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, double AngleTolerance, double step, double radius, vector<vector<uint> >& PolygonsVector) {
+void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, double AngleTolerance, double step, double radius, vector<vector<uint> >& PolygonsVector, bool debugFlag) {
 	//Выделение групп параллельных линий
 	vector<vector<uint> > ParallelLineGroups;
 	vector<uint> FirstGroup;
@@ -493,9 +588,17 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 								cv::Point3f endPointFound = ExtendedLinesVector[index * 2 + 1];
 								cv::Vec3f line = endPointFound - beginPointFound;
 								double cosAngle = abs(beginLineExpected.dot(line) / (cv::norm(line) * cv::norm(beginLineExpected)));
-								if(cosAngle > 0.95) { //фильтрация совсем трешовых вариантов
-									currentBeginScores[index].goodPoints++;
+								if (debugFlag) {
+									cv::Vec3f lineA = leftLineEndPoint - leftLineBeginPoint;
+									double cos = abs(lineA.dot(line) / (cv::norm(line) * cv::norm(lineA)));
+									if(cosAngle < 0.5) { currentBeginScores[index].goodPoints++; }
 								}
+								else {
+									if(cosAngle > 0.95) { //фильтрация совсем трешовых вариантов
+										currentBeginScores[index].goodPoints++;
+									}
+								}
+								
 							}
 						}
 					}
@@ -526,7 +629,15 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 								cv::Point3f endPointFound = ExtendedLinesVector[index * 2 + 1];
 								cv::Vec3f line = endPointFound - beginPointFound;
 								double cosAngle = abs(endLineExpected.dot(line) / (cv::norm(line) * cv::norm(endLineExpected)));
-								if(cosAngle > 0.95) { currentEndScores[index].goodPoints++; }
+								if(debugFlag) {
+									cv::Vec3f lineA = leftLineEndPoint - leftLineBeginPoint;
+									double cos = abs(lineA.dot(line) / (cv::norm(line) * cv::norm(lineA)));
+									if(cosAngle < 0.5) { currentEndScores[index].goodPoints++; }
+
+								} else {
+									if(cosAngle > 0.95) { currentEndScores[index].goodPoints++; }
+								}
+								
 							}
 						}
 					}
@@ -817,8 +928,8 @@ void ShowLSDLinesOnScreen(cv::Mat image, vector<Line> LSDLines) {
 		cv::putText(debi2, ">", end, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.5, CV_RGB(0, 0, 0), 1.5);
 	}
 	cv::imshow("LSD_Lines", debi2);
-	cv::waitKey(0);
-	cv::destroyWindow("LSD_Lines");
+	//cv::waitKey(0);
+	//cv::destroyWindow("LSD_Lines");
 }
 
 void ShowLineAtIterationStep(cv::Mat image, vector<int> indices, vector<cv::Point3f> beggienings, vector<cv::Point3f> endings, Line lineToJoin, Line l) {
@@ -860,8 +971,8 @@ void ShowJoinedLines(cv::Mat image, unordered_map<int, Line> lines) {
 	}
 	//cv::imwrite("lines_all.jpg", copyImage3);
 	cv::imshow("AllJoinedLines", copyImage3);
-	cv::waitKey(0);
-	cv::destroyWindow("AllJoinedLines");
+	//cv::waitKey(0);
+	//cv::destroyWindow("AllJoinedLines");
 }
 
 void ExtendLines(cv::Mat image, vector<Line> LSDLines, unordered_map<int, Line> &output) {
@@ -1139,18 +1250,66 @@ bool doLinesIntersect(Line a, Line b, double EPSILON) {
 		&& lineSegmentTouchesOrCrossesLine(b, a, EPSILON);
 }
 
-void getLinePairs(unordered_map<int, Line> lines, vector<PairOfTwoLines>& outputVec) {
+void getLinePairs(vector <cv::Point3f> lines, vector<PairOfTwoLines>& outputVec) {
 	double EPSILON = 0.000001;
-	for(auto & firstLine : lines) {
-		for(auto & secondLine : lines) {
-			if (doLinesIntersect(firstLine.second, secondLine.second, EPSILON)) {
-				PairOfTwoLines tempPair = PairOfTwoLines(firstLine.first, secondLine.first);
+
+	for(int i = 0; i < lines.size() / 2; i++) {
+		Line firstLine = Line(lines[2 * i], lines[2 * i + 1]);
+		for(int j = 0; j < lines.size() / 2; j++) {
+			Line secondLine = Line(lines[2 * j], lines[2 * j + 1]);
+			if (doLinesIntersect(firstLine, secondLine, EPSILON)) {
+				PairOfTwoLines tempPair = PairOfTwoLines(i, j);
 				outputVec.push_back(tempPair);
 			}
 		}
 	}
 }
 ///INTERSECTION_DETECTION_END
+
+void erosion(std::string src, cv::Mat &result) {
+	auto M = cv::imread(src, CV_LOAD_IMAGE_GRAYSCALE);
+	auto Orig = cv::imread(src, CV_LOAD_IMAGE_COLOR);
+
+	resize(M, M, cv::Size(640, 480));
+	resize(Orig, Orig, cv::Size(640, 480));
+
+	equalizeHist(M, M); // повышение контрастности
+
+	auto erosion_type = cv::MORPH_ERODE;
+	auto erosion_size = 3;
+	auto element = cv::getStructuringElement(erosion_type,
+										 cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
+										 cv::Point(erosion_size, erosion_size));
+	erode(M, M, element); // увеличение черноты
+
+	auto clahe = cv::createCLAHE(50, cv::Size(16, 16));
+	clahe->apply(M, M);
+	erode(M, M, element); // повышение контрастности HDR style
+
+	bitwise_not(M, M); // инверсия
+	result = M.clone();
+}
+
+void getSkeleton(cv::Mat img, cv::Mat& result) {
+	cv::threshold(img, img, 127, 255, cv::THRESH_BINARY);
+	cv::Mat skel(img.size(), CV_8UC1, cv::Scalar(0));
+	cv::Mat temp;
+	cv::Mat eroded;
+
+	cv::Mat element = cv::getStructuringElement(cv::MORPH_CROSS, cv::Size(3, 3));
+
+	bool done;
+	do {
+		cv::erode(img, eroded, element);
+		cv::dilate(eroded, temp, element); // temp = open(img)
+		cv::subtract(img, temp, temp);
+		cv::bitwise_or(skel, temp, skel);
+		eroded.copyTo(img);
+
+		done = (cv::countNonZero(img) == 0);
+	} while(!done);
+	result = skel.clone();
+}
 
 int main() {
 	clock_t tStart = clock();
@@ -1166,20 +1325,32 @@ int main() {
 	double step = 6; //шаг для дискритизации линий
 	double radius = 20; //радиус поиска около точек соединительных линий
 
-	uint ResizeIfMoreThan = 2000; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
+	uint ResizeIfMoreThan = 1280; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
 	bool debug = 1;
 
 	//Открытие изображения
-	cv::Mat image;
-	image = cv::imread("test.jpg", CV_LOAD_IMAGE_COLOR);
+	auto src = "test2.jpg";
+	cv::Mat erodedImage;
+	erosion(src, erodedImage); //эрозия
 
+	cv::Mat skeleton;
+	getSkeleton(erodedImage, skeleton); //получение скелета
+	cv::imshow("skeleton", skeleton);
+
+	cv::imwrite("skeleton.jpg", skeleton);
+
+	cv::Mat image;
+	image = cv::imread("skeleton.jpg", CV_LOAD_IMAGE_COLOR);
+	//BrightnessAndContrastAuto(image, image, 25); 
+	cv::imshow("image", image);
 	//Изменение размера
 	uint maxRes = max(image.cols, image.rows);
 	if(maxRes > ResizeIfMoreThan) {
 		float scaleFactor = float(ResizeIfMoreThan) / maxRes;
 		cv::Size size = cv::Size(image.cols * scaleFactor, image.rows * scaleFactor);
-		cv::resize(image, image, size);
+		cv::resize(image, image, size, 0,0,CV_INTER_CUBIC);
 	}
+	//BrightnessAndContrastAuto(image, image, 25);
 
 	//Границы кадра
 	uint maxX = image.cols;
@@ -1188,7 +1359,7 @@ int main() {
 	//Фокальное расстояние
 	double temp_focal = maxX * focal_length / sensor_width;
 	uint f = (uint)temp_focal; //фокальное расстояние в пикселях
-
+	
 	//LSD
 	int numLinesDetected;
 	double* LsdLinesArray = DoLSD(image, numLinesDetected);
@@ -1251,7 +1422,7 @@ int main() {
 		cout << "reduced on iteration " << i << " lines count: " << lines.size() << endl;
 		for(auto &p : lines) {
 			//noise filter
-			if (p.second.norm() > (5*maxX/100)) {
+			if (p.second.norm() > (3*maxX/100)) {
 				LSDLines.push_back(p.second);
 			}
 		}
@@ -1264,14 +1435,22 @@ int main() {
 	///DEBUG_END
 
 
+	vector<cv::Point3f> ExtendedLinesVector;
+	for (auto &p : lines) {
+		Line temp = p.second;
+		ExtendedLinesVector.push_back(temp.begin);
+		ExtendedLinesVector.push_back(temp.end);
+	}
+
 	//Getting intersections
 	vector<PairOfTwoLines> LinePairsVector;
-	getLinePairs(lines, LinePairsVector);
+	getLinePairs(ExtendedLinesVector, LinePairsVector);
 	cout << "Number of line pairs: " << LinePairsVector.size() << endl;
 
-	return 0;
+	numLinesDetected = ExtendedLinesVector.size() / 2;
 
-	vector<cv::Point3f> ExtendedLinesVector;
+	//return 0;
+
 	//RANSAC (находим углы альфа и бэта)
 	uint maxRansacTrials = (uint)LinePairsVector.size(); //максимальное количество итерация алгоритма RANSAC
 	dlib::matrix<double, 0, 1> solution = RANSAC(maxRansacTrials, countInlierThreshold, f, LinePairsVector, ExtendedLinesVector);
@@ -1285,15 +1464,15 @@ int main() {
 	vector<uint> DirectionsOfLines; //элемент с номером i означает направление i-ой линии (0=x, 1=y, 2=z, 3=xy, 4=xz, 5=yz)
 	assignDirections(numLinesDetected, ExtendedLinesVector, VanishingPoints, DirectionsOfLines);
 
-	return 0;
+	//return 0;
 
 
 	/// Past
 	//Выделяем все замкнутые области
 	vector<vector<uint> > PolygonsVector;
-	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector);
+	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector, true);
 
-	/*
+	
 	//Смотрим сколько пикселей в каждой области
 	vector<int> NumbersOfPixelsInArea;
 	getNumbersOfPixels(image, PolygonsVector, numLinesDetected, ExtendedLinesVector, NumbersOfPixelsInArea);
@@ -1314,7 +1493,46 @@ int main() {
 	//Получаем нормали
 	vector<uint> PlaneNormals;
 	getNormals(PlaneNormals, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, NumbersOfPixelsInArea, PolygonIntersections);
-	*/
+
+	
+	for(int i = 0; i < PolygonsVector.size(); i++) {
+		vector<uint> bla = PolygonsVector[i];
+		uint index1 = bla[0];
+		uint index2 = bla[1];
+		uint index3 = bla[2];
+		uint index4 = bla[3];
+		
+		cv::Point3f B_1 = ExtendedLinesVector[index1 * 2];
+		cv::Point3f E_1 = ExtendedLinesVector[index1 * 2 + 1];
+		cv::Point3f B_2 = ExtendedLinesVector[index2 * 2];
+		cv::Point3f E_2 = ExtendedLinesVector[index2 * 2 + 1];
+		cv::Point3f B_3 = ExtendedLinesVector[index3 * 2];
+		cv::Point3f E_3 = ExtendedLinesVector[index3 * 2 + 1];
+		cv::Point3f B_4 = ExtendedLinesVector[index4 * 2];
+		cv::Point3f E_4 = ExtendedLinesVector[index4 * 2 + 1];
+		vector<cv::Point> tempVec = {cv::Point(B_1.x, B_1.y), cv::Point(E_1.x, E_1.y), cv::Point(B_2.x, B_2.y), cv::Point(E_2.x, E_2.y), cv::Point(B_3.x, B_3.y), cv::Point(E_3.x, E_3.y), cv::Point(B_4.x, B_4.y), cv::Point(E_4.x, E_4.y)};
+		vector<cv::Point> convexHull;  // Convex hull points 
+		vector<cv::Point> contour;  // Convex hull contour points        
+		double epsilon = 0.001; // Contour approximation accuracy
+
+								// Calculate convex hull of original points (which points positioned on the boundary)
+		cv::convexHull(cv::Mat(tempVec), convexHull, false);
+		approxPolyDP(cv::Mat(convexHull), contour, 0.001, true);
+		cv::Scalar blaColor;
+		if (PlaneNormals[i] == 0) {
+			blaColor = cv::Scalar(255, 0, 0, 255);
+		}
+		else if (PlaneNormals[i] == 1) {
+			blaColor = cv::Scalar(0, 0, 255, 255);
+		} else {
+			blaColor = cv::Scalar(0, 255, 0, 255);
+		}
+		cv::fillConvexPoly(image, &contour[0], contour.size(), blaColor);
+	}
+	cv::imshow("Polygons", image);
+	cv::waitKey(0);
+	cv::destroyWindow("Polygons");
+	
 	system("pause");
 	return 0;
 }
