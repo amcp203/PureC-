@@ -1269,9 +1269,10 @@ void getLinePairs(vector <cv::Point3f> lines, vector<PairOfTwoLines>& outputVec)
 void erosion(std::string src, cv::Mat &result) {
 	auto M = cv::imread(src, CV_LOAD_IMAGE_GRAYSCALE);
 	auto Orig = cv::imread(src, CV_LOAD_IMAGE_COLOR);
-
+	
 	resize(M, M, cv::Size(640, 480));
 	resize(Orig, Orig, cv::Size(640, 480));
+	cv::imshow("Original Image", Orig);
 
 	equalizeHist(M, M); // повышение контрастности
 
@@ -1311,6 +1312,107 @@ void getSkeleton(cv::Mat img, cv::Mat& result) {
 	result = skel.clone();
 }
 
+void solveSystem(cv::Mat input, cv::Mat &output) {
+	cv::Mat S, U, Vt;
+	cv::SVD::compute(input, S, U, Vt, cv::SVD::FULL_UV);
+
+	cv::Mat V;
+	cv::transpose(Vt, V);
+
+	cv::Mat result(3, 1, CV_32F);
+	V.col(2).copyTo(result.col(0));
+
+	int lastColumn = V.cols - 1;
+	output = V.col(lastColumn).clone();
+}
+
+void getDepths(double focal, vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, vector<vector<uint> > PolygonsVector, bool** PolygonIntersections, cv::Mat &Depths) {
+
+	vector<vector<double>> input;
+
+	for (int i = 0; i < PolygonsVector.size()-1; i++) {
+		for (int j = i + 1; j < PolygonsVector.size(); j++) {
+			if (PolygonIntersections[i][j] == 1) {
+				//Получение вектора нормали i-ого сегмента
+				int normal_i = PlaneNormals[i];
+				cv::Mat norm_i;
+				switch (normal_i)
+				{
+				case 0:
+					norm_i = (cv::Mat_<double>(1, 3) << 1, 0, 0);
+					break;
+				case 1:
+					norm_i = (cv::Mat_<double>(1, 3) << 0, 1, 0);
+					break;
+				case 2:
+					norm_i = (cv::Mat_<double>(1, 3) << 0, 0, 1);
+					break;
+				}
+				
+				//Получение вектора нормали j-ого сегмента
+				int normal_j = PlaneNormals[j];
+				cv::Mat norm_j;
+				switch (normal_j)
+				{
+				case 0:
+					norm_j = (cv::Mat_<double>(1, 3) << 1, 0, 0);
+					break;
+				case 1:
+					norm_j = (cv::Mat_<double>(1, 3) << 0, 1, 0);
+					break;
+				case 2:
+					norm_j = (cv::Mat_<double>(1, 3) << 0, 0, 1);
+					break;
+				}
+				
+				//Получение вектора общей линии (пересечения)
+				cv::Mat K_inverted = K_inv(focal);
+				cv::Mat commonLine;
+
+				vector<uint> planeA = PolygonsVector[i];
+				vector<uint> planeB = PolygonsVector[j];
+				for (int k1 = 0; k1 < planeA.size(); k1++) {
+					for (int k2 = 0; k2 < planeB.size(); k2++) {
+						if (planeA[k1] == planeB[k2]) {
+							//Преобразование point3f в mat
+							cv::Point3f commonPoint = ExtendedLinesVector[2 * planeA[k1] + 1];
+							double temporaryArray[3][1] = { {commonPoint.x}, {commonPoint.y}, {commonPoint.z} };
+							cv::Mat commonPointMatrix = cv::Mat(3, 1, CV_64F, temporaryArray);
+							commonLine = K_inverted*commonPointMatrix;
+						}
+					}
+				}
+
+				
+				vector<double> row(PolygonsVector.size(), 0); //создание вектора, заполненного нулями
+				cv::Mat OneElementMat_1 = norm_j*commonLine;
+				row[i] = OneElementMat_1.at<double>(0, 0);
+				cv::Mat OneElementMat_2 = -1*norm_i*commonLine;
+				row[j] = OneElementMat_2.at<double>(0, 0);
+
+				input.push_back(row);
+			}
+		}
+	}
+	//Преобразуем вектор векторов в двумерный массив
+	int verticalSize = input.size();
+	if (verticalSize != 0) {
+		int horizontalSize = input[0].size();
+		double **inputArray = new double *[verticalSize];;
+		for (int j = 0; j < verticalSize; j++) {
+			inputArray[j] = new double[horizontalSize];
+		}
+		for (int i = 0; i < verticalSize; i++) {
+			for (int j = 0; j < horizontalSize; j++) {
+				inputArray[i][j] = input[i][j];
+			}
+		}
+		cv::Mat inputMat = cv::Mat(verticalSize, horizontalSize, CV_32F, inputArray);
+		solveSystem(inputMat, Depths);
+	}
+}
+
+
 int main() {
 	clock_t tStart = clock();
 	srand(time(0)); //чтобы последовательность рандомных чисел была всегда уникальна при новом запуске
@@ -1340,9 +1442,8 @@ int main() {
 	cv::imwrite("skeleton.jpg", skeleton);
 
 	cv::Mat image;
-	image = cv::imread("skeleton.jpg", CV_LOAD_IMAGE_COLOR);
-	//BrightnessAndContrastAuto(image, image, 25); 
-	cv::imshow("image", image);
+	image = cv::imread("skeleton.jpg", CV_LOAD_IMAGE_COLOR); 
+
 	//Изменение размера
 	uint maxRes = max(image.cols, image.rows);
 	if(maxRes > ResizeIfMoreThan) {
@@ -1422,7 +1523,7 @@ int main() {
 		cout << "reduced on iteration " << i << " lines count: " << lines.size() << endl;
 		for(auto &p : lines) {
 			//noise filter
-			if (p.second.norm() > (3*maxX/100)) {
+			if (p.second.norm() > (2*maxX/100)) {
 				LSDLines.push_back(p.second);
 			}
 		}
@@ -1494,7 +1595,13 @@ int main() {
 	vector<uint> PlaneNormals;
 	getNormals(PlaneNormals, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, NumbersOfPixelsInArea, PolygonIntersections);
 
-	
+	//Получаем глубины
+	auto t11 = chrono::high_resolution_clock::now().time_since_epoch();
+	cv::Mat Depths;
+	getDepths(focal_length, PlaneNormals, numLinesDetected, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, PolygonIntersections, Depths);
+	auto dt1 = chrono::duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now().time_since_epoch() - t11).count();
+	cout << "it took " << dt1 << endl; // 
+
 	for(int i = 0; i < PolygonsVector.size(); i++) {
 		vector<uint> bla = PolygonsVector[i];
 		uint index1 = bla[0];
