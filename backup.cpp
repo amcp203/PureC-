@@ -1,4 +1,4 @@
-п»ї//C++ Includes
+//C++ Includes
 #include <iostream>
 #include <vector>
 #include <unordered_map>
@@ -134,31 +134,15 @@ void write_eps(double* segs, int n, int dim, char* filename, int xsize, int ysiz
 	fprintf(eps, "showpage\n");
 	fprintf(eps, "%%%%EOF\n");
 }
-class NearestLine {
-public:
-	int index;
-	double dist;
-	NearestLine(int a, double b) {
-		index = a;
-		dist = b;
-	}
-};
 
 //LSD
 double* DoLSD(cv::Mat image, int& numLines) {
-	//РљРѕРЅРІРµСЂС‚Р°С†РёСЏ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ РґР»СЏ РїРѕСЃР»РµРґСѓСЋС‰РµРіРѕ РїСЂРёРјРµРЅРµРЅРёСЏ Р°Р»РіРѕСЂРёС‚РјР° LSD
+	//Конвертация изображения для последующего применения алгоритма LSD
 	cv::Mat grayscaleMat(image.size(), CV_8U);
 	auto im = image.clone();
-<<<<<<< Updated upstream
 	cv::cvtColor(im, grayscaleMat, CV_BGR2GRAY);
 
 
-=======
-	
-	//cv::cvtColor(im, grayscaleMat, CV_BGR2GRAY); //danger
-	grayscaleMat = image.clone(); //danger
-	
->>>>>>> Stashed changes
 	/////////////////////////
 	Canny(grayscaleMat, grayscaleMat, 50, 200, 3, true);
 	vector<cv::Vec4i> lines;
@@ -186,7 +170,7 @@ double* DoLSD(cv::Mat image, int& numLines) {
 			pgm_image[i] = double(grayscaleMat.data[i]);
 		}
 	}
-	//РџСЂРёРјРµРЅРµРЅРёРµ LSD
+	//Применение LSD
 	int numLinesDetected;
 	double* outArray;
 	outArray = lsd(&numLinesDetected, pgm_image, image.cols, image.rows);
@@ -195,17 +179,6 @@ double* DoLSD(cv::Mat image, int& numLines) {
 	return outArray;
 }
 
-<<<<<<< Updated upstream
-//РћРєСЂСѓРіР»РµРЅРёРµ РґРѕ С†РµР»РѕРіРѕ РїРѕ РїСЂР°РІРёР»Р°Рј РѕРєСЂСѓРіР»РµРЅРёСЏ
-double RoundTo(double x) {
-	int y = floor(x);
-	if ((x - y) >= 0.5)
-		y++;
-	return (double)y;
-}
-
-=======
->>>>>>> Stashed changes
 class Line {
 public:
 	cv::Point3f begin;
@@ -220,216 +193,8 @@ public:
 	};
 };
 
-<<<<<<< Updated upstream
-class PairOfTwoLines {
-public:
-	uint FirstIndex;
-	uint SecondIndex;
 
-	PairOfTwoLines(uint a, uint b) {
-		FirstIndex = a;
-		SecondIndex = b;
-	}
 
-	PairOfTwoLines() {
-		FirstIndex = 0;
-		SecondIndex = 0;
-	}
-};
-
-class LineScore {
-public:
-	uint goodPoints;
-	uint totalPoints;
-	uint LineIndex;
-
-	LineScore(uint a, uint b, uint c) {
-		goodPoints = a;
-		LineIndex = c;
-		totalPoints = b;
-	}
-};
-
-//Р”Р»СЏ СЃРѕСЂС‚РёСЂРѕРІРєРё
-bool comparator(const LineScore l, const LineScore r) {
-	double score1 = 0;
-	double score2 = 0;
-	if (l.totalPoints != 0) { score1 = double(l.goodPoints) / l.totalPoints; }
-	if (r.totalPoints != 0) { score2 = double(r.goodPoints) / r.totalPoints; }
-	return score1 > score2;
-}
-
-//Р Р°РЅРґРѕРјРЅРѕРµ РІРµС‰. РІ РёРЅС‚РµСЂРІР°Р»Рµ РѕС‚ a РґРѕ b
-float RandomFloat(float a, float b) {
-	float random = ((float)rand()) / (float)RAND_MAX;
-	float diff = b - a;
-	float r = random * diff;
-	return a + r;
-}
-
-//Р Р°РЅРґРѕРјРЅРѕРµ РїРѕР»РѕР¶РёС‚РµР»СЊРЅРѕРµ С†РµР»РѕРµ РІ РёРЅС‚РµСЂРІР°Р»Рµ РѕС‚ a РґРѕ b
-uint RandomInt(uint a, uint b) {
-	uint output = a + (rand() % (uint)(b - a + 1));
-	return output;
-}
-
-//Intrinsic matrix
-cv::Mat K_inv(double f) {
-	double temp[3][3] = { { f, 0, 0 },{ 0, f, 0 },{ 0, 0, 1 } };
-	cv::Mat k = cv::Mat(3, 3, CV_64F, temp);
-	return k.inv();
-}
-
-//РС‰РµС‚ РЅРѕРјРµСЂ Р»РёРЅРёРё РїРѕ РєРѕРѕСЂРґРёРЅР°С‚Р°Рј С‚РѕС‡РєРё
-int FindIndexOfLine(vector<cv::Point3f> vec, cv::Point3f point) {
-	auto position = find_if(vec.begin(), vec.end(), [&](const cv::Point3f& a) { return a.x == point.x && a.y == point.y; });
-	if (position != vec.end()) {
-		int index = (position - vec.begin()) / 2;
-		return index;
-	}
-	return -1;
-}
-
-//Cost С„СѓРЅРєС†РёСЏ, РєРѕС‚РѕСЂСѓСЋ РјРёРЅРёРјРёР·РёСЂСѓРµРј РґР»СЏ СЂР°СЃС‡РµС‚Р° СѓРіР»РѕРІ alpha Рё beta
-class cost_function {
-private:
-
-public:
-	cv::Mat lineOne;
-	cv::Mat lineTwo;
-	cv::Mat lineThree;
-	cv::Mat lineFour;
-	cv::Mat K_inverted;
-
-	cost_function(double f, cv::Point3f a, cv::Point3f b, cv::Point3f c, cv::Point3f d, cv::Point3f e, cv::Point3f ff, cv::Point3f g, cv::Point3f h) {
-		lineOne = cv::Mat(b - a);
-		lineOne.convertTo(lineOne, CV_64F);
-		lineTwo = cv::Mat(d - c);
-		lineTwo.convertTo(lineTwo, CV_64F);
-		lineThree = cv::Mat(ff - e);
-		lineThree.convertTo(lineThree, CV_64F);
-		lineFour = cv::Mat(h - g);
-		lineFour.convertTo(lineFour, CV_64F);
-		K_inverted = K_inv(f);
-	}
-
-	double operator()(const dlib::matrix<double, 0, 1>& arg) const {
-		double summ = 0;
-
-		double r_x_array[3][3] = { { 1, 0, 0 },{ 0, cos(arg(0)), -sin(arg(0)) },{ 0, sin(arg(0)), cos(arg(0)) } };
-		cv::Mat R_x = cv::Mat(3, 3, CV_64F, r_x_array);
-		double r_y_array[3][3] = { { cos(arg(1)), 0, sin(arg(1)) },{ 0, 1, 0 },{ -sin(arg(1)), 0, cos(arg(1)) } };
-		cv::Mat R_y = cv::Mat(3, 3, CV_64F, r_y_array);
-		cv::Mat H = R_y * R_x * K_inverted;
-		cv::Mat H_t = H.t();
-
-		cv::Mat l_1 = H_t * lineOne;
-		cv::normalize(l_1, l_1);
-		l_1.resize(2);
-
-		cv::Mat l_2 = H_t * lineTwo;
-		cv::normalize(l_2, l_2);
-		l_2.resize(2);
-
-		cv::Mat l_3 = H_t * lineThree;
-		cv::normalize(l_3, l_3);
-		l_3.resize(2);
-
-		cv::Mat l_4 = H_t * lineFour;
-		cv::normalize(l_4, l_4);
-		l_4.resize(2);
-
-		cv::Mat multiply_one_mat = l_1.t() * l_2;
-		cv::Mat multiply_two_mat = l_3.t() * l_4;
-		summ += multiply_one_mat.at<double>(0, 0) * multiply_one_mat.at<double>(0, 0) + multiply_two_mat.at<double>(0, 0) * multiply_two_mat.at<double>(0, 0);
-		return summ;
-	}
-};
-
-//РњРёРЅРёРјРёР·Р°С†РёСЏ cost function РґР»СЏ РґРІСѓС… РїР°СЂ РїРµСЂРµСЃРµРєР°СЋС‰РёС…СЃСЏ Р»РёРЅРёР№
-dlib::matrix<double, 0, 1> minimize_C(double f, cv::Point3f a, cv::Point3f b, cv::Point3f c, cv::Point3f d, cv::Point3f e, cv::Point3f ff, cv::Point3f g, cv::Point3f h) {
-	dlib::matrix<double, 0, 1> solution(2);
-	solution = 0, 0;
-	find_min_bobyqa(cost_function(f, a, b, c, d, e, ff, g, h),
-		solution,
-		5, // number of interpolation points
-		dlib::uniform_matrix<double>(2, 1, -M_PI / 2), // lower bound constraint
-		dlib::uniform_matrix<double>(2, 1, M_PI / 2), // upper bound constraint
-		M_PI / 10, // initial trust region radius
-		0.001, // stopping trust region radius
-		100 // max number of objective function evaluations
-	);
-	return solution;
-}
-
-//РЎС‡РёС‚Р°РµС‚ СЃРєРѕР»СЊРєРѕ РїР°СЂ Р»РёРЅРёР№ СЃС‚Р°Р»Рѕ РѕСЂС‚РѕРіРѕРЅР°Р»СЊРЅС‹РјРё РїСЂРё РЅР°Р№РґРµРЅРЅС‹С… alpha Рё beta
-uint countInlierScore(dlib::matrix<double, 0, 1> solution, double threshold, double f, vector<PairOfTwoLines> LinePairsVector, vector<cv::Point3f> ExtendedLinesVector) {
-	uint score = 0;
-	cv::Mat K_inverted = K_inv(f);
-	double temp[3][3] = { { 1, 0, 0 },{ 0, cos(solution(0)), -sin(solution(0)) },{ 0, sin(solution(0)), cos(solution(0)) } };
-	cv::Mat R_x = cv::Mat(3, 3, CV_64F, temp);
-	double temp2[3][3] = { { cos(solution(1)), 0, sin(solution(1)) },{ 0, 1, 0 },{ -sin(solution(1)), 0, cos(solution(1)) } };
-	cv::Mat R_y = cv::Mat(3, 3, CV_64F, temp2);
-	cv::Mat H = R_y * R_x * K_inverted;
-	cv::Mat H_t = H.t();
-	for (int i = 0; i < LinePairsVector.size(); i++) {
-		PairOfTwoLines pair = LinePairsVector[i];
-		cv::Vec3f lineOne = ExtendedLinesVector[2 * pair.FirstIndex + 1] - ExtendedLinesVector[2 * pair.FirstIndex];
-		cv::Vec3f lineTwo = ExtendedLinesVector[2 * pair.SecondIndex + 1] - ExtendedLinesVector[2 * pair.SecondIndex];
-
-		cv::Mat first_line = cv::Mat(lineOne);
-		first_line.convertTo(first_line, CV_64F);
-		cv::Mat second_line = cv::Mat(lineTwo);
-		second_line.convertTo(second_line, CV_64F);
-
-		cv::Mat l_1 = H_t * first_line;
-		cv::normalize(l_1, l_1);
-		l_1.resize(2);
-
-		cv::Mat l_2 = H_t * second_line;
-		cv::normalize(l_2, l_2);
-		l_2.resize(2);
-
-		cv::Mat multiply_one_mat = l_1.t() * l_2;
-		double summ = multiply_one_mat.at<double>(0, 0) * multiply_one_mat.at<double>(0, 0);
-		if (summ <= threshold) { score++; }
-	}
-	return score;
-}
-
-//РђР»РіРѕСЂРёС‚Рј RANSAC (Р±РµСЂРµС‚ СЂР°РЅРґРѕРјРЅС‹Рµ РїР°СЂС‹ Р»РёРЅРёР№, РґРµР»Р°РµС‚ РјРёРЅРёРјРёР·Р°С†РёСЋ Рё СЃС‡РёС‚Р°РµС‚ СЃРєРѕР»СЊРєРѕ РїР°СЂ СЃС‚Р°Р»Рѕ РѕСЂС‚РѕРіРѕРЅР°Р»СЊРЅС‹РјРё, РїРѕС‚РѕРј РІС‹Р±РёСЂР°РµС‚ Р»СѓС‡С€РµРµ СЂРµС€РµРЅРёРµ
-dlib::matrix<double, 0, 1> RANSAC(uint maxTrials, double threshold, double f, vector<PairOfTwoLines> LinePairsVector, vector<cv::Point3f> ExtendedLinesVector) {
-	uint counter = 0;
-	uint bestScore = 0;
-	dlib::matrix<double, 0, 1> bestSolution(2);
-	while (counter < maxTrials) {
-		uint first_index = RandomInt(0, LinePairsVector.size() - 1);
-		uint second_index = first_index;
-		while (second_index == first_index) { second_index = RandomInt(0, LinePairsVector.size() - 1); }
-		PairOfTwoLines pairOne = LinePairsVector[first_index];
-		PairOfTwoLines pairTwo = LinePairsVector[second_index];
-		cv::Point3f a = ExtendedLinesVector[2 * pairOne.FirstIndex];
-		cv::Point3f b = ExtendedLinesVector[2 * pairOne.FirstIndex + 1];
-		cv::Point3f c = ExtendedLinesVector[2 * pairOne.SecondIndex];
-		cv::Point3f d = ExtendedLinesVector[2 * pairOne.SecondIndex + 1];
-		cv::Point3f e = ExtendedLinesVector[2 * pairTwo.FirstIndex];
-		cv::Point3f ff = ExtendedLinesVector[2 * pairTwo.FirstIndex + 1];
-		cv::Point3f g = ExtendedLinesVector[2 * pairTwo.SecondIndex];
-		cv::Point3f h = ExtendedLinesVector[2 * pairTwo.SecondIndex + 1];
-
-		dlib::matrix<double, 0, 1> solution = minimize_C(f, a, b, c, d, e, ff, g, h);
-		uint score = countInlierScore(solution, threshold, f, LinePairsVector, ExtendedLinesVector);
-		if (score > bestScore) {
-			bestScore = score;
-			bestSolution = solution;
-		}
-		counter++;
-	}
-	cout << "Number of inliers: " << bestScore << endl;
-	return bestSolution;
-}
-=======
->>>>>>> Stashed changes
 
 //http://stackoverflow.com/questions/16792751/hashmap-for-2d3d-coordinates-i-e-vector-of-doubles
 struct hashFunc {
@@ -488,7 +253,7 @@ void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVec
 		cv::Point3f beginPoint = ExtendedLinesVector[2 * i];
 		cv::Point3f endPoint = ExtendedLinesVector[2 * i + 1];
 		cv::Vec3f line = endPoint - beginPoint;
-		cv::Point3f middlePoint = cv::Point3f((endPoint.x - beginPoint.x) / 2, (endPoint.y - beginPoint.y) / 2, 0); //С‚РѕС‡РєР° СЃРµСЂРµРґРёРЅС‹ Р»РёРЅРёРё
+		cv::Point3f middlePoint = cv::Point3f((endPoint.x - beginPoint.x) / 2, (endPoint.y - beginPoint.y) / 2, 0); //точка середины линии
 
 		cv::Vec3f lineToX = middlePoint - VanishingPoints[0];
 		double cosX = abs(line.dot(lineToX) / (cv::norm(line) * cv::norm(lineToX)));
@@ -498,7 +263,6 @@ void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVec
 		double cosZ = abs(line.dot(lineToZ) / (cv::norm(line) * cv::norm(lineToZ)));
 
 		uint result;
-<<<<<<< Updated upstream
 		if (cosX <= 0.9 && cosY <= 0.9 && abs(cosX - cosY) < 0.01) { result = 3; }
 		else if (cosX <= 0.9 && cosZ <= 0.9 && abs(cosX - cosZ) < 0.01) { result = 4; }
 		else if (cosY <= 0.9 && cosZ <= 0.9 && abs(cosY - cosZ) < 0.01) { result = 5; }
@@ -506,25 +270,12 @@ void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVec
 		else if (cosY <= 0.9) { result = 1; }
 		else
 			if (cosZ <= 0.9) { result = 2; }
-=======
-		if (cosX <= 0.9 && cosY <= 0.9 && abs(cosX - cosY) < 0.01) { result = 3;}
-		else if (cosX >= 0.95 && cosZ >= 0.95 && abs(cosX - cosZ) < 0.01) { result = 4; }
-		else if (cosY >= 0.95 && cosZ >= 0.95 && abs(cosY - cosZ) < 0.01) { result = 5; }
-		else if (cosX >= 0.90) { result = 0; }
-		else if (cosZ >= 0.90) { result = 2; }
-		else
-			if (cosY >= 0.90) { result = 1; }
->>>>>>> Stashed changes
 		output.push_back(result);
 	}
 }
 
-<<<<<<< Updated upstream
-void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, double AngleTolerance, double step, double radius, vector<vector<uint> >& PolygonsVector, bool debugFlag, cv::Mat image, double distanceEpsilon) {
-=======
 void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, double AngleTolerance, double step, double radius, vector<vector<uint> >& PolygonsVector, bool debugFlag, cv::Mat image, double distanceEpsilon, double AngleEpsilon) {
->>>>>>> Stashed changes
-	//Р’С‹РґРµР»РµРЅРёРµ РіСЂСѓРїРї РїР°СЂР°Р»Р»РµР»СЊРЅС‹С… Р»РёРЅРёР№
+	//Выделение групп параллельных линий
 	vector<vector<uint> > ParallelLineGroups;
 	vector<uint> FirstGroup;
 	ParallelLineGroups.push_back(FirstGroup);
@@ -560,7 +311,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 		LineScoreVector.push_back(temp);
 	}
 
-	//Р”РёСЃРєСЂРёС‚РёР·Р°С†РёСЏ Р»РёРЅРёР№ СЃ С€Р°РіРѕРј step
+	//Дискритизация линий с шагом step
 	vector<cv::Point3f> pointsForSearch;
 	vector<uint> PointIndexes;
 	for (int i = 0; i < numLinesDetected; i++) {
@@ -572,14 +323,14 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 			double currentY = (currentX - beginPoint.x) * (endPoint.y - beginPoint.y) / (endPoint.x - beginPoint.x) + beginPoint.y;
 			cv::Point3f point = cv::Point3f(currentX, currentY, 0);
 			pointsForSearch.push_back(point);
-			PointIndexes.push_back(i); //Р·Р°РїРѕРјРёРЅР°РµРј РєР°РєР°СЏ С‚РѕС‡РєР° Рє РєР°РєРѕР№ Р»РёРЅРёРё РїСЂРёРЅР°РґР»РµР¶РёС‚
+			PointIndexes.push_back(i); //запоминаем какая точка к какой линии принадлежит
 			totalPoints++;
 			currentX += step;
 		}
 		if (totalPoints != 0) { LineScoreVector[i].totalPoints = totalPoints; }
 	}
 
-	//РџРѕРёСЃРє Р»РёРЅРёР№ РІ Octree
+	//Поиск линий в Octree
 	cv::Octree tree = cv::Octree(pointsForSearch);
 	for (int i = 0; i < ParallelLineGroups.size(); i++) {
 		vector<uint> Group = ParallelLineGroups[i];
@@ -619,7 +370,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 					cv::Point3f rightLineBeginPoint;
 					cv::Point3f rightLineEndPoint;
 					/*
-					//Р’С‹РІРѕРґ Р»РёРЅРёР№ РЅР° СЌРєСЂР°РЅ
+					//Вывод линий на экран
 					cv::Mat debImage = image.clone();
 					const cv::Scalar blaColor = cv::Scalar(0, 0, 255, 255);
 					for (int ka = 0; ka < Group.size(); ka++) {
@@ -648,7 +399,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 					cv::waitKey(0);
 					cv::destroyWindow("NearestLines");*/
 
-					//РЎРјРѕС‚СЂРёРј РєР°РєР°СЏ Р»РёРЅРёСЏ Р»РµРІРµРµ
+					//Смотрим какая линия левее
 					if (ExtendedLinesVector[2 * SecondIndex + 1].x >= ExtendedLinesVector[2 * FirstIndex + 1].x) {
 						leftLineBeginPoint = ExtendedLinesVector[2 * FirstIndex];
 						leftLineEndPoint = ExtendedLinesVector[2 * FirstIndex + 1];
@@ -662,13 +413,13 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 						leftLineEndPoint = ExtendedLinesVector[2 * SecondIndex + 1];
 					}
 
-					//РџРѕРёСЃРє Р»РёРЅРёРё РґР»СЏ С‚РѕС‡РµРє РЅР°С‡Р°Р»Р°
+					//Поиск линии для точек начала
 					vector<cv::Point3f> centersForSearchBegin;
 					vector<LineScore> currentBeginScores = LineScoreVector;
 					cv::Vec3f beginLineExpected = rightLineBeginPoint - leftLineBeginPoint;
 					cv::Vec3f endLineExpected = rightLineEndPoint - leftLineEndPoint;
 					double currentX = leftLineBeginPoint.x + step / 2;
-					while (currentX <= rightLineBeginPoint.x) //РґРёСЃРєСЂРёС‚РёР·Р°С†РёСЏ СЃРѕРµРґРёРЅРёС‚РµР»СЊРЅС‹С… РѕС‚СЂРµР·РєРѕРІ СЃ С€Р°РіРѕРј step/2
+					while (currentX <= rightLineBeginPoint.x) //дискритизация соединительных отрезков с шагом step/2
 					{
 						double currentY = (currentX - leftLineBeginPoint.x) * (rightLineBeginPoint.y - leftLineBeginPoint.y) / (rightLineBeginPoint.x - leftLineBeginPoint.x) + leftLineBeginPoint.y;
 						cv::Point3f point = cv::Point3f(currentX, currentY, 0);
@@ -680,7 +431,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 						tree.getPointsWithinSphere(centersForSearchBegin[g], radius, foundedPoints);
 						for (int h = 0; h < foundedPoints.size(); h++) {
 							cv::Point3f tempPoint = foundedPoints[h];
-							auto position = find_if(pointsForSearch.begin(), pointsForSearch.end(), [&](const cv::Point3f& a) { //РёРґРµРЅС‚РёС„РёС†РёСЂСѓРµРј Рє РєР°РєРѕР№ Р»РёРЅРёРё РїСЂРёРЅР°РґР»РµР¶РёС‚ РЅР°Р№РґРµРЅРЅР°СЏ С‚РѕС‡РєР°
+							auto position = find_if(pointsForSearch.begin(), pointsForSearch.end(), [&](const cv::Point3f& a) { //идентифицируем к какой линии принадлежит найденная точка
 								return a.x == tempPoint.x && a.y == tempPoint.y;
 							});
 							uint indexInVector = position - pointsForSearch.begin();
@@ -693,14 +444,10 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 								if (debugFlag) {
 									cv::Vec3f lineA = leftLineEndPoint - leftLineBeginPoint;
 									double cos = abs(lineA.dot(line) / (cv::norm(line) * cv::norm(lineA)));
-<<<<<<< Updated upstream
-									if (cosAngle < 0.5) { currentBeginScores[index].goodPoints++; }
-=======
 									if (cosAngle < AngleEpsilon) { currentBeginScores[index].goodPoints++; }
->>>>>>> Stashed changes
 								}
 								else {
-									if (cosAngle > 0.95) { //С„РёР»СЊС‚СЂР°С†РёСЏ СЃРѕРІСЃРµРј С‚СЂРµС€РѕРІС‹С… РІР°СЂРёР°РЅС‚РѕРІ
+									if (cosAngle > 0.95) { //фильтрация совсем трешовых вариантов
 										currentBeginScores[index].goodPoints++;
 									}
 								}
@@ -708,10 +455,10 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 							}
 						}
 					}
-					sort(currentBeginScores.begin(), currentBeginScores.end(), comparator); //СЃРѕСЂС‚РёСЂСѓРµРј
-					uint BeginLineIndex = currentBeginScores[0].LineIndex; //РІС‹Р±РёСЂР°РµРј Р»СѓС‡С€СѓСЋ
+					sort(currentBeginScores.begin(), currentBeginScores.end(), comparator); //сортируем
+					uint BeginLineIndex = currentBeginScores[0].LineIndex; //выбираем лучшую
 
-																		   //РџРѕРёСЃРє Р»РёРЅРёРё РґР»СЏ С‚РѕС‡РµРє РЅР°С‡Р°Р»Р°
+																		   //Поиск линии для точек начала
 					vector<cv::Point3f> centersForSearchEnd;
 					vector<LineScore> currentEndScores = LineScoreVector;
 					currentX = leftLineEndPoint.x + step / 2;
@@ -738,11 +485,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 								if (debugFlag) {
 									cv::Vec3f lineA = leftLineEndPoint - leftLineBeginPoint;
 									double cos = abs(lineA.dot(line) / (cv::norm(line) * cv::norm(lineA)));
-<<<<<<< Updated upstream
-									if (cosAngle < 0.5) { currentEndScores[index].goodPoints++; }
-=======
 									if (cosAngle < AngleEpsilon) { currentEndScores[index].goodPoints++; }
->>>>>>> Stashed changes
 
 								}
 								else {
@@ -756,7 +499,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 					sort(currentEndScores.begin(), currentEndScores.end(), comparator);
 					uint EndLineIndex = currentEndScores[0].LineIndex;
 
-					if (currentEndScores[0].goodPoints != 0 && currentBeginScores[0].goodPoints != 0) { //РµСЃР»Рё РЅР°С€Р»Рё РѕР±Рµ Р»РёРЅРёРё, С‚Рѕ СЃРѕС…СЂР°РЅСЏРµРј Р·Р°РјРєРЅСѓС‚СѓСЋ РѕР±Р»Р°СЃС‚СЊ (РїРѕ 4-РµРј РёРЅРґРµРєСЃР°Рј Р»РёРЅРёР№)
+					if (currentEndScores[0].goodPoints != 0 && currentBeginScores[0].goodPoints != 0) { //если нашли обе линии, то сохраняем замкнутую область (по 4-ем индексам линий)
 						vector<uint> FoundedPolygon = { FirstIndex, SecondIndex, BeginLineIndex, EndLineIndex };
 						PolygonsVector.push_back(FoundedPolygon);
 					}
@@ -843,10 +586,10 @@ double lineSupportingScore(vector<uint> lines, uint lineIndex, int numLinesDetec
 
 }
 
-//Wocc РґРѕРґРµР»Р°С‚СЊ
+//Wocc доделать
 double DirectionScore(vector<uint> lines, uint direction, int numLinesDetected, vector<cv::Point3f> LsdLinesVector, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines) {
 	double result = 0;
-	double Wocc = 1; // РґРѕРґРµР»Р°С‚СЊ РїРѕРґСЃС‡РµС‚ СЌС‚РѕРіРѕ РєРѕСЌС„С„РёС†РёРµРЅС‚Р°
+	double Wocc = 1; // доделать подсчет этого коэффициента
 	for (int i = 0; i < lines.size(); i++) {
 		uint index = lines[i];
 		if (direction == DirectionsOfLines[index]) { result += Wocc * lineSupportingScore(lines, index, numLinesDetected, LsdLinesVector, ExtendedLinesVector); }
@@ -951,7 +694,7 @@ void getNormals(vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Poi
 	bool success = 1;
 	while (success) {
 		success = 0;
-		for (int swap = 0; swap < 3; swap++) //swap = 0, С‚Рѕ РјРµРЅСЏРµРј X Рё Y; swap = 1, С‚Рѕ РјРµРЅСЏРµРј Y Рё Z; swap = 2, С‚Рѕ РјРµРЅСЏРµРј X Рё Z
+		for (int swap = 0; swap < 3; swap++) //swap = 0, то меняем X и Y; swap = 1, то меняем Y и Z; swap = 2, то меняем X и Z
 		{
 			uint AlphaDir, BetaDir;
 			if (swap == 0) {
@@ -967,7 +710,7 @@ void getNormals(vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Poi
 				BetaDir = 2;
 			}
 
-			//РЎС‚СЂРѕРёРј РіСЂР°С„
+			//Строим граф
 			int DIM = PolygonsVector.size() + 2;
 			int** g = new int *[DIM];;
 			for (int j = 0; j < DIM; j++) { g[j] = new int[DIM]; }
@@ -1004,7 +747,7 @@ void getNormals(vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Poi
 			}
 			for (int i = 0; i < DIM; i++) { for (int j = 0; j < i; j++) { g[i][j] = g[j][i]; } }
 
-			//РґРµР»Р°РµРј РјРёРЅРёРјР°Р»СЊРЅС‹Р№ СЂР°Р·СЂРµР·
+			//делаем минимальный разрез
 			vector<int> minimumCut;
 			vector<uint> newPlaneNormals = PlaneNormals;
 			mincut(g, DIM, minimumCut);
@@ -1034,48 +777,11 @@ void getNormals(vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Poi
 	}
 }
 
-void ShowLSDLinesOnScreenAssigned(cv::Mat image, vector<Line> LSDLines, int i, vector<uint> directions) {
+void ShowLSDLinesOnScreen(cv::Mat image, vector<Line> LSDLines, int i) {
 	int kk = 0;
 	cv::Mat debi2 = image.clone();
 	cv::cvtColor(debi2, debi2, CV_BGR2GRAY);
 	cv::cvtColor(debi2, debi2, CV_GRAY2BGR);
-	for (int k = 0; k < LSDLines.size(); k++) {
-		Line l = LSDLines[k];
-		auto id = to_string(kk++);
-		cv::Scalar blaColor;
-		if (directions[k] == 0) {
-			blaColor = cv::Scalar(255, 0, 0, 255);
-		}
-		else if (directions[k] == 1) {
-			blaColor = cv::Scalar(0, 255, 0, 255);
-		}
-		else if (directions[k] == 2) {
-			blaColor = cv::Scalar(0, 0, 255, 255);
-		}
-		
-		auto begin = cv::Point(l.begin.x, l.begin.y);
-		auto end = cv::Point(l.end.x, l.end.y);
-		cv::line(debi2, begin, end, blaColor, 2);
-		//cv::circle(debi2, begin, 7, blaColor, -1);
-		//cv::putText(debi2, "<" + id, begin, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.5, CV_RGB(0, 0, 0), 1.5);
-		//cv::circle(debi2, end, 7, blaColor, -1);
-		//cv::putText(debi2, ">", end, cv::FONT_HERSHEY_SCRIPT_COMPLEX, 0.5, CV_RGB(0, 0, 0), 1.5);
-	}
-	if (i != -1) {
-		cv::imshow("LSD Lines on a 1/" + std::to_string((int)pow(2, i + 1)) + " of a resolution", debi2);
-	}
-	else {
-		cv::imshow("LSD Lines", debi2);
-	}
-	cv::waitKey(0);
-	cv::destroyWindow("LSD_Lines");
-}
-
-void ShowLSDLinesOnScreen(cv::Mat image, vector<Line> LSDLines, int i) {
-	int kk = 0;
-	cv::Mat debi2 = image.clone();
-	//cv::cvtColor(debi2, debi2, CV_BGR2GRAY); //danger
-	//cv::cvtColor(debi2, debi2, CV_GRAY2BGR); //danger
 	for (auto & l : LSDLines) {
 		auto id = to_string(kk++);
 		const cv::Scalar blaColor = cv::Scalar(255, 0, 0, 255);
@@ -1161,9 +867,8 @@ void ShowJoinedLines(cv::Mat image, unordered_map<int, Line> lines) {
 
 	}
 	//cv::imwrite("lines_all.jpg", copyImage3);
-
 	cv::imshow("AllJoinedLines", copyImage3);
-	cv::waitKey(0);
+	//cv::waitKey(0);
 	//cv::destroyWindow("AllJoinedLines");
 }
 
@@ -1471,20 +1176,20 @@ void erosion(std::string src, cv::Mat &result) {
 	resize(Orig, Orig, cv::Size(640, 480));
 	cv::imshow("Original Image", Orig);
 	cv::medianBlur(M, M, 37);
-	//equalizeHist(M, M); // РїРѕРІС‹С€РµРЅРёРµ РєРѕРЅС‚СЂР°СЃС‚РЅРѕСЃС‚Рё
+	//equalizeHist(M, M); // повышение контрастности
 
 	auto erosion_type = cv::MORPH_ERODE;
 	auto erosion_size = 3;
 	auto element = cv::getStructuringElement(erosion_type,
 		cv::Size(2 * erosion_size + 1, 2 * erosion_size + 1),
 		cv::Point(erosion_size, erosion_size));
-	erode(M, M, element); // СѓРІРµР»РёС‡РµРЅРёРµ С‡РµСЂРЅРѕС‚С‹
+	erode(M, M, element); // увеличение черноты
 
 	auto clahe = cv::createCLAHE(50, cv::Size(16, 16));
 	clahe->apply(M, M);
-	erode(M, M, element); // РїРѕРІС‹С€РµРЅРёРµ РєРѕРЅС‚СЂР°СЃС‚РЅРѕСЃС‚Рё HDR style
+	erode(M, M, element); // повышение контрастности HDR style
 
-	bitwise_not(M, M); // РёРЅРІРµСЂСЃРёСЏ
+	bitwise_not(M, M); // инверсия
 	result = M.clone();
 }
 
@@ -1509,169 +1214,13 @@ void getSkeleton(cv::Mat img, cv::Mat& result) {
 	result = skel.clone();
 }
 
-<<<<<<< Updated upstream
-void solveSystem(cv::Mat input, cv::Mat &output) {
-	cv::Mat S, U, Vt;
-	cv::SVD::compute(input, S, U, Vt, cv::SVD::FULL_UV);
-
-	cv::Mat V;
-	cv::transpose(Vt, V);
-
-	int lastColumn = V.cols - 1;
-	cv::Mat lastColumnMatrix = V.col(lastColumn).clone();
-	output = lastColumnMatrix.clone();
-}
-
-void getDepths(double focal, vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, vector<vector<uint> > PolygonsVector, bool** PolygonIntersections, cv::Mat &Depths) {
-
-	vector<vector<double>> input;
-
-	for (int i = 0; i < PolygonsVector.size() - 1; i++) {
-		for (int j = i + 1; j < PolygonsVector.size(); j++) {
-			if (PolygonIntersections[i][j] == 1) {
-				//РџРѕР»СѓС‡РµРЅРёРµ РІРµРєС‚РѕСЂР° РЅРѕСЂРјР°Р»Рё i-РѕРіРѕ СЃРµРіРјРµРЅС‚Р°
-				int normal_i = PlaneNormals[i];
-				cv::Mat norm_i;
-				switch (normal_i)
-				{
-				case 0:
-					norm_i = (cv::Mat_<double>(1, 3) << 1, 0, 0);
-					break;
-				case 1:
-					norm_i = (cv::Mat_<double>(1, 3) << 0, 1, 0);
-					break;
-				case 2:
-					norm_i = (cv::Mat_<double>(1, 3) << 0, 0, 1);
-					break;
-				}
-
-				//РџРѕР»СѓС‡РµРЅРёРµ РІРµРєС‚РѕСЂР° РЅРѕСЂРјР°Р»Рё j-РѕРіРѕ СЃРµРіРјРµРЅС‚Р°
-				int normal_j = PlaneNormals[j];
-				cv::Mat norm_j;
-				switch (normal_j)
-				{
-				case 0:
-					norm_j = (cv::Mat_<double>(1, 3) << 1, 0, 0);
-					break;
-				case 1:
-					norm_j = (cv::Mat_<double>(1, 3) << 0, 1, 0);
-					break;
-				case 2:
-					norm_j = (cv::Mat_<double>(1, 3) << 0, 0, 1);
-					break;
-				}
-
-				//РџРѕР»СѓС‡РµРЅРёРµ РІРµРєС‚РѕСЂР° РѕР±С‰РµР№ Р»РёРЅРёРё (РїРµСЂРµСЃРµС‡РµРЅРёСЏ)
-				cv::Mat K_inverted = K_inv(focal);
-				cv::Mat commonLine;
-
-				vector<uint> planeA = PolygonsVector[i];
-				vector<uint> planeB = PolygonsVector[j];
-				for (int k1 = 0; k1 < planeA.size(); k1++) {
-					for (int k2 = 0; k2 < planeB.size(); k2++) {
-						if (planeA[k1] == planeB[k2]) {
-							//РџСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёРµ point3f РІ mat
-							cv::Point3f commonPoint = ExtendedLinesVector[2 * planeA[k1] + 1];
-							double temporaryArray[3][1] = { { commonPoint.x },{ commonPoint.y },{ commonPoint.z } };
-							cv::Mat commonPointMatrix = cv::Mat(3, 1, CV_64F, temporaryArray);
-							commonLine = K_inverted*commonPointMatrix;
-						}
-					}
-				}
-
-
-				vector<double> row(PolygonsVector.size(), 0); //СЃРѕР·РґР°РЅРёРµ РІРµРєС‚РѕСЂР°, Р·Р°РїРѕР»РЅРµРЅРЅРѕРіРѕ РЅСѓР»СЏРјРё
-				cv::Mat OneElementMat_1 = norm_j*commonLine;
-				row[i] = OneElementMat_1.at<double>(0, 0);
-				cv::Mat OneElementMat_2 = -1 * norm_i*commonLine;
-				row[j] = OneElementMat_2.at<double>(0, 0);
-
-				input.push_back(row);
-			}
-		}
-	}
-	//РџСЂРµРѕР±СЂР°Р·СѓРµРј РІРµРєС‚РѕСЂ РІРµРєС‚РѕСЂРѕРІ РІ РґРІСѓРјРµСЂРЅС‹Р№ РјР°СЃСЃРёРІ
-	int verticalSize = input.size();
-	if (verticalSize != 0) {
-		int horizontalSize = input[0].size();
-		double **inputArray = new double *[verticalSize];;
-		for (int j = 0; j < verticalSize; j++) {
-			inputArray[j] = new double[horizontalSize];
-		}
-		for (int i = 0; i < verticalSize; i++) {
-			for (int j = 0; j < horizontalSize; j++) {
-				inputArray[i][j] = input[i][j];
-			}
-		}
-		cv::Mat inputMat = cv::Mat(verticalSize, horizontalSize, CV_32F, inputArray);
-		solveSystem(inputMat, Depths);
-	}
-}
-
-
-int main() {
-	clock_t tStart = clock();
-	srand(time(0)); //С‡С‚РѕР±С‹ РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕСЃС‚СЊ СЂР°РЅРґРѕРјРЅС‹С… С‡РёСЃРµР» Р±С‹Р»Р° РІСЃРµРіРґР° СѓРЅРёРєР°Р»СЊРЅР° РїСЂРё РЅРѕРІРѕРј Р·Р°РїСѓСЃРєРµ
-
-					//РџРµСЂРµРјРµРЅРЅС‹Рµ РґР»СЏ РЅР°СЃС‚СЂРѕР№РєРё
-	double focal_length = 4; //С„РѕРєР°Р»СЊРЅРѕРµ СЂР°СЃСЃС‚РѕСЏРЅРёРµ РІ mm
-	double sensor_width = 4.59; //С€РёСЂРёРЅР° СЃРµРЅСЃРѕСЂР° РІ mm
-	double ExtendThreshold = 0.01; //РїРѕСЂРѕРі РѕС‚РєР»РѕРЅРµРЅРёСЏ Р»РёРЅРёРё (РґР»СЏ СѓРґР»РёРЅРµРЅРёСЏ)
-	double countInlierThreshold = 0.0001; //РµСЃР»Рё РєРІР°РґСЂР°С‚ СЃРєР°Р»СЏСЂРЅРѕРіРѕ РїСЂРѕРёР·РІРµРґРµРЅРёСЏ РґРІСѓС… Р»РёРЅРёР№ РјРµРЅСЊС€Рµ СЌС‚РѕРіРѕ С‡РёСЃР»Р°, С‚Рѕ РјС‹ СЃС‡РёС‚Р°РµРј СЌС‚Рё Р»РёРЅРёРё РѕСЂС‚РѕРіРѕРЅР°Р»СЊРЅС‹РјРё
-	double noiseFilterConst = 2.9;
-
-	double AngleTolerance = 0.0001; //РµСЃР»Рё abs(tg(angle1) - tg(angle2)) < AngleTolerance, С‚Рѕ СЌС‚Рё РґРІРµ Р»РёРЅРёРё РѕР±СЉРµРґРёРЅСЏСЋС‚СЃСЏ РІ РѕРґРЅСѓ РіСЂСѓРїРїСѓ (РїР°СЂР°Р»Р»РµР»СЊРЅС‹С… Р»РёРЅРёР№ СЃ РЅРµРєРѕС‚РѕСЂРѕР№ СЃС‚РµРїРµРЅСЊСЋ С‚РѕР»РµСЂР°РЅС‚РЅРѕСЃС‚Рё)
-	double distanceEpsilon = 50;
-	double step = 6; //С€Р°Рі РґР»СЏ РґРёСЃРєСЂРёС‚РёР·Р°С†РёРё Р»РёРЅРёР№
-	double radius = 20; //СЂР°РґРёСѓСЃ РїРѕРёСЃРєР° РѕРєРѕР»Рѕ С‚РѕС‡РµРє СЃРѕРµРґРёРЅРёС‚РµР»СЊРЅС‹С… Р»РёРЅРёР№
-
-	uint ResizeIfMoreThan = 1280; //РµСЃР»Рё С€РёСЂРёРЅР° РёР»Рё РІС‹СЃРѕС‚Р° РёР·РѕР±СЂР°Р¶РµРЅРёСЏ Р±РѕР»СЊС€Рµ СЌС‚РѕРіРѕ С‡РёСЃР»Р°, С‚Рѕ РјС‹ РјРµРЅСЏРµРј СЂР°Р·РјРµСЂ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ
-	bool debug = 1;
-
-	//РћС‚РєСЂС‹С‚РёРµ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ
-	auto src = "TestNumberTwo.jpg";
-	cv::Mat erodedImage;
-	erosion(src, erodedImage); //СЌСЂРѕР·РёСЏ
-	cv::imshow("Eroded image", erodedImage);
-	BrightnessAndContrastAuto(erodedImage, erodedImage, 75);
-	cv::imshow("Eroded image Contrast", erodedImage);
-	cv::Mat skeleton;
-	getSkeleton(erodedImage, skeleton); //РїРѕР»СѓС‡РµРЅРёРµ СЃРєРµР»РµС‚Р°
-	cv::imshow("skeleton", skeleton);
-
-	cv::imwrite("skeleton.jpg", skeleton);
-
-	cv::Mat image;
-	image = cv::imread("skeleton.jpg", CV_LOAD_IMAGE_COLOR);
-
-	//РР·РјРµРЅРµРЅРёРµ СЂР°Р·РјРµСЂР°
-	uint maxRes = max(image.cols, image.rows);
-	if (maxRes > ResizeIfMoreThan) {
-		float scaleFactor = float(ResizeIfMoreThan) / maxRes;
-		cv::Size size = cv::Size(image.cols * scaleFactor, image.rows * scaleFactor);
-		cv::resize(image, image, size, 0, 0, CV_INTER_CUBIC);
-	}
-	//BrightnessAndContrastAuto(image, image, 25);
-
-	//Р“СЂР°РЅРёС†С‹ РєР°РґСЂР°
-	uint maxX = image.cols;
-	uint maxY = image.rows;
-
-	//Р¤РѕРєР°Р»СЊРЅРѕРµ СЂР°СЃСЃС‚РѕСЏРЅРёРµ
-	double temp_focal = maxX * focal_length / sensor_width;
-	uint f = (uint)temp_focal; //С„РѕРєР°Р»СЊРЅРѕРµ СЂР°СЃСЃС‚РѕСЏРЅРёРµ РІ РїРёРєСЃРµР»СЏС…
-
-							   //LSD
-	int numLinesDetected;
-=======
 void getLsdLines(cv::Mat image, vector<Line> &LsdLines, int &numLinesDetected, vector<cv::Point3f> &outputLsdLinesVector) {
 	//LSD
->>>>>>> Stashed changes
 	double* LsdLinesArray = DoLSD(image, numLinesDetected);
 	cout << "Number of LSD lines detected: " << numLinesDetected << endl;
 
-	//РљРѕРїРёСЂСѓРµРј С‚РѕС‡РєРё РёР· РјР°СЃСЃРёРІР° РІ РІРµРєС‚РѕСЂ СЃ СѓС‡РµС‚РѕРј РїРѕСЂСЏРґРєР°
-	vector<cv::Point3f> LsdLinesVector; //СЌР»РµРјРµРЅС‚ СЃ РЅРѕРјРµСЂРѕРј 2*i РґР°РµС‚ РЅР°Рј С‚РѕС‡РєСѓ РЅР°С‡Р°Р»Р° i-РѕР№ Р»РёРЅРёРё, СЌР»РµРјРµРЅС‚ СЃ РЅРѕРјРµСЂРѕРј 2*i + 1 РґР°РµС‚ РЅР°Рј С‚РѕС‡РєСѓ РєРѕРЅС†Р° i-РѕР№ Р»РёРЅРёРё
+	//Копируем точки из массива в вектор с учетом порядка
+	vector<cv::Point3f> LsdLinesVector; //элемент с номером 2*i дает нам точку начала i-ой линии, элемент с номером 2*i + 1 дает нам точку конца i-ой линии
 	for (int i = 0; i < numLinesDetected; i++) {
 		double x1 = RoundTo(LsdLinesArray[7 * i]);
 		double y1 = RoundTo(LsdLinesArray[7 * i + 1]);
@@ -1748,53 +1297,30 @@ public:
 
 
 int main() {
-	
+
 	clock_t tStart = clock();
-	srand(time(0)); //С‡С‚РѕР±С‹ РїРѕСЃР»РµРґРѕРІР°С‚РµР»СЊРЅРѕСЃС‚СЊ СЂР°РЅРґРѕРјРЅС‹С… С‡РёСЃРµР» Р±С‹Р»Р° РІСЃРµРіРґР° СѓРЅРёРєР°Р»СЊРЅР° РїСЂРё РЅРѕРІРѕРј Р·Р°РїСѓСЃРєРµ
+	srand(time(0)); //чтобы последовательность рандомных чисел была всегда уникальна при новом запуске
 
-	//РџРµСЂРµРјРµРЅРЅС‹Рµ РґР»СЏ РЅР°СЃС‚СЂРѕР№РєРё
-	double focal_length = 4; //С„РѕРєР°Р»СЊРЅРѕРµ СЂР°СЃСЃС‚РѕСЏРЅРёРµ РІ mm
-	double sensor_width = 4.59; //С€РёСЂРёРЅР° СЃРµРЅСЃРѕСЂР° РІ mm
-	double ExtendThreshold = 0.01; //РїРѕСЂРѕРі РѕС‚РєР»РѕРЅРµРЅРёСЏ Р»РёРЅРёРё (РґР»СЏ СѓРґР»РёРЅРµРЅРёСЏ)
-	double countInlierThreshold = 0.0001; //РµСЃР»Рё РєРІР°РґСЂР°С‚ СЃРєР°Р»СЏСЂРЅРѕРіРѕ РїСЂРѕРёР·РІРµРґРµРЅРёСЏ РґРІСѓС… Р»РёРЅРёР№ РјРµРЅСЊС€Рµ СЌС‚РѕРіРѕ С‡РёСЃР»Р°, С‚Рѕ РјС‹ СЃС‡РёС‚Р°РµРј СЌС‚Рё Р»РёРЅРёРё РѕСЂС‚РѕРіРѕРЅР°Р»СЊРЅС‹РјРё
-	double noiseFilterConst = 15;
+					//Переменные для настройки
+	double focal_length = 4; //фокальное расстояние в mm
+	double sensor_width = 4.59; //ширина сенсора в mm
+	double ExtendThreshold = 0.01; //порог отклонения линии (для удлинения)
+	double countInlierThreshold = 0.0001; //если квадрат скалярного произведения двух линий меньше этого числа, то мы считаем эти линии ортогональными
+	double noiseFilterConst = 10;
 
-	double AngleTolerance = 0.01; //РµСЃР»Рё abs(tg(angle1) - tg(angle2)) < AngleTolerance, С‚Рѕ СЌС‚Рё РґРІРµ Р»РёРЅРёРё РѕР±СЉРµРґРёРЅСЏСЋС‚СЃСЏ РІ РѕРґРЅСѓ РіСЂСѓРїРїСѓ (РїР°СЂР°Р»Р»РµР»СЊРЅС‹С… Р»РёРЅРёР№ СЃ РЅРµРєРѕС‚РѕСЂРѕР№ СЃС‚РµРїРµРЅСЊСЋ С‚РѕР»РµСЂР°РЅС‚РЅРѕСЃС‚Рё)
-	double distanceEpsilon = 0; ///
-	
-	double AngleEpsilon = 0.55; ///
-	double step = 2; //С€Р°Рі РґР»СЏ РґРёСЃРєСЂРёС‚РёР·Р°С†РёРё Р»РёРЅРёР№
-	double radius = 30; //СЂР°РґРёСѓСЃ РїРѕРёСЃРєР° РѕРєРѕР»Рѕ С‚РѕС‡РµРє СЃРѕРµРґРёРЅРёС‚РµР»СЊРЅС‹С… Р»РёРЅРёР№
+	double AngleTolerance = 0.01; //если abs(tg(angle1) - tg(angle2)) < AngleTolerance, то эти две линии объединяются в одну группу (параллельных линий с некоторой степенью толерантности)
+	double distanceEpsilon = 0;
 
-	uint ResizeIfMoreThan = 900; //РµСЃР»Рё С€РёСЂРёРЅР° РёР»Рё РІС‹СЃРѕС‚Р° РёР·РѕР±СЂР°Р¶РµРЅРёСЏ Р±РѕР»СЊС€Рµ СЌС‚РѕРіРѕ С‡РёСЃР»Р°, С‚Рѕ РјС‹ РјРµРЅСЏРµРј СЂР°Р·РјРµСЂ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ
+	double AngleEpsilon = 0.55;
+	double step = 2; //шаг для дискритизации линий
+	double radius = 30; //радиус поиска около точек соединительных линий
+
+	uint ResizeIfMoreThan = 900; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
 	bool debug = 1;
 	bool useSkeleton = 0;
 	bool useLinesExt = 1;
 
-	bool overwrite = 0; //РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ СЂСѓС‡РЅС‹Рµ РґР°РЅРЅС‹Рµ РґР»СЏ С‚РµСЃС‚РѕРІРѕРіРѕ РїРѕРґСЃС‡РµС‚Р° РЅРѕСЂРјР°Р»РµР№
-	bool differentColors = 1;
-
-<<<<<<< Updated upstream
-	unordered_map<int, Line> lines;
-
-	///DEBUG_BEGIN
-	ShowLSDLinesOnScreen(image, LSDLines);
-	///DEBUG_END
-	auto t1 = chrono::high_resolution_clock::now().time_since_epoch();
-
-	for (int i = 0; i < 2; ++i) {
-		lines = unordered_map<int, Line>();
-		ExtendLines(image, LSDLines, lines);
-		//ExtendLinesReversalMove(image, LSDLines, lines); //РѕР±СЂР°С‚РЅС‹Р№ С…РѕРґ
-		LSDLines = vector<Line>();
-		LSDLines.resize(lines.size());
-		cout << "reduced on iteration " << i << " lines count: " << lines.size() << endl;
-		for (auto &p : lines) {
-			//noise filter
-			if (p.second.norm() >(noiseFilterConst*maxX / 100)) {
-				LSDLines.push_back(p.second);
-=======
-	//РћС‚РєСЂС‹С‚РёРµ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ
+	//Открытие изображения
 	auto src = "usecase_2.png";
 	cv::Mat image;
 	if (!useSkeleton) {
@@ -1802,74 +1328,75 @@ int main() {
 	}
 	else {
 		cv::Mat erodedImage;
-		erosion(src, erodedImage); //СЌСЂРѕР·РёСЏ
+		erosion(src, erodedImage); //эрозия
 		cv::imshow("Eroded image", erodedImage);
 		BrightnessAndContrastAuto(erodedImage, erodedImage, 75);
 		cv::imshow("Eroded image Contrast", erodedImage);
 		cv::Mat skeleton;
-		getSkeleton(erodedImage, skeleton); //РїРѕР»СѓС‡РµРЅРёРµ СЃРєРµР»РµС‚Р°
+		getSkeleton(erodedImage, skeleton); //получение скелета
 		cv::imshow("skeleton", skeleton);
 		cv::imwrite("skeleton.jpg", skeleton);
 
 		image = cv::imread("skeleton.jpg", CV_LOAD_IMAGE_COLOR);
 	}
-	
 
-	//РР·РјРµРЅРµРЅРёРµ СЂР°Р·РјРµСЂР°
+
+	//Изменение размера
 	uint maxRes = max(image.cols, image.rows);
 	if (maxRes > ResizeIfMoreThan) {
 		float scaleFactor = float(ResizeIfMoreThan) / maxRes;
 		cv::Size size = cv::Size(image.cols * scaleFactor, image.rows * scaleFactor);
 		cv::resize(image, image, size, 0, 0, CV_INTER_CUBIC);
 	}
-	
-	//Р“СЂР°РЅРёС†С‹ РєР°РґСЂР°
-	uint maxX = image.cols;
-	uint maxY = image.rows;
-	
-	//Р¤РѕРєР°Р»СЊРЅРѕРµ СЂР°СЃСЃС‚РѕСЏРЅРёРµ
-	double temp_focal = maxX * focal_length / sensor_width;
-	uint f = (uint)temp_focal; //С„РѕРєР°Р»СЊРЅРѕРµ СЂР°СЃСЃС‚РѕСЏРЅРёРµ РІ РїРёРєСЃРµР»СЏС…
-	
-	//РџРµСЂРµРјРµРЅРЅС‹Рµ РґР»СЏ РЅР°СЃС‚СЂРѕР№РєРё
-	int claheClipSize = 4;
-	int bilateralDiameter = 5;
-	int bilateralSigma = 15;
-	int BrightnessAndContrast = 15;
-	//save original
-	cv::Mat original = image.clone();
-	//Clahe
-	cv::Ptr<cv::CLAHE>  myClahe = cv::createCLAHE(claheClipSize);
-	cv::cvtColor(image, image, CV_BGR2GRAY);
-	myClahe->apply(image, image);
-	cv::imshow("clahe", image);
-	cv::waitKey();
-	//BilateralFilter
-	cv::Mat bilateral;
-	cv::bilateralFilter(image, bilateral, bilateralDiameter, bilateralSigma, bilateralSigma);
-	cv::imshow("clahe+bilateral", bilateral);
-	cv::waitKey();
-	image = bilateral.clone();
-	//Brightness/Contrast
-	BrightnessAndContrastAuto(image, image, BrightnessAndContrast);
-	cv::imshow("clahe+bilateral+contrast", image);
-	cv::waitKey();
-	//Sobel
+	//BrightnessAndContrastAuto(image, image, 25);
+
+
+	/*
+	auto t2 = chrono::high_resolution_clock::now().time_since_epoch();
+	cv::imwrite("not_sharpened.jpg",image);
+	cv::Mat frame = image.clone();
+	cv::Mat output;
+	cv::GaussianBlur(frame, output, cv::Size(17, 23), 3);
+	cv::addWeighted(frame, 1.50, output, -0.5, 0, output);
+	cv::imwrite("sharpened.jpg", output);
+	auto dt2 = chrono::duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now().time_since_epoch() - t2).count();
+	cout << "it took " << dt2 << endl; // 247ms for 10 iterations, 10ms for one iteration, 35ms for 2 on one core
+
+
+	//B
 	int ddepth = CV_16S;
 	int scale = 1;
 	int delta = 0;
+	cv::Mat src_gray;
+	cv::cvtColor(image, src_gray, CV_BGR2GRAY);
 	cv::Mat grad_x, grad_y;
 	cv::Mat abs_grad_x, abs_grad_y;
+
 	/// Gradient X
-	cv::Sobel(image, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT);
+	Sobel(src_gray, grad_x, ddepth, 1, 0, 3, scale, delta, cv::BORDER_DEFAULT);
 	/// Gradient Y
-	cv::Sobel(image, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT);
+	Sobel(src_gray, grad_y, ddepth, 0, 1, 3, scale, delta, cv::BORDER_DEFAULT);
 	convertScaleAbs(grad_x, abs_grad_x);
 	convertScaleAbs(grad_y, abs_grad_y);
 	cv::Mat grad;
-	cv::addWeighted(abs_grad_x, 1, abs_grad_y, 1, 0, grad);
+	addWeighted(abs_grad_x, 1, abs_grad_y, 1, 0, grad);
+	cv::imshow("sobel_x", abs_grad_x);
+	cv::imwrite("sobel_x.jpg", abs_grad_x);
+	cv::imshow("sobel_y", abs_grad_y);
+	cv::imwrite("sobel_y.jpg", abs_grad_y);
 	cv::imshow("sobel", grad);
+	cv::imwrite("sobel_summ.jpg", grad);
 	cv::waitKey();
+	//B*/
+
+
+	//Границы кадра
+	uint maxX = image.cols;
+	uint maxY = image.rows;
+
+	//Фокальное расстояние
+	double temp_focal = maxX * focal_length / sensor_width;
+	uint f = (uint)temp_focal; //фокальное расстояние в пикселях
 
 	int numLinesDetected;
 	vector<cv::Point3f> LsdLinesVector;
@@ -1878,11 +1405,33 @@ int main() {
 
 	if (!useLinesExt)
 	{
-		 //LSD
+		//LSD
 		getLsdLines(image, LSDLines, numLinesDetected, LsdLinesVector);
+
+		///DEBUG_BEGIN
 		ShowLSDLinesOnScreen(image, LSDLines, -1);
+		///DEBUG_END
 
 		/*
+		auto t2 = chrono::high_resolution_clock::now().time_since_epoch();
+		///PYRAMID BEGIN
+		cv::Mat copiedImage = image.clone();
+		for (int i = 0; i < 3; i++) {
+		pyrDown(copiedImage, copiedImage, cv::Size(copiedImage.cols / 2, copiedImage.rows / 2));
+		//cv::imshow("1/" + std::to_string((int)pow(2,i+1)) + " of a resolution", copiedImage);
+
+		int num;
+		vector<cv::Point3f> LsdLinesVec;
+		vector<Line> LsdLines;
+		getLsdLines(copiedImage, LsdLines, num, LsdLinesVec);
+		ShowLSDLinesOnScreen(copiedImage, LsdLines, i);
+		}
+		///PYRAMID END
+		auto dt2 = chrono::duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now().time_since_epoch() - t2).count();
+		cout << "it took " << dt2 << endl; // 247ms for 10 iterations, 10ms for one iteration, 35ms for 2 on one core*/
+
+
+
 		//A
 		vector<cv::Mat> imageStorage;
 		vector<vector<cv::Point3f>> LinesVecStorage;
@@ -1895,7 +1444,7 @@ int main() {
 			vector<cv::Point3f> LsdLinesVec;
 			vector<Line> LsdLines;
 			getLsdLines(copiedImage, LsdLines, num, LsdLinesVec);
-		
+
 			imageStorage.push_back(copiedImage);
 			LinesVecStorage.push_back(LsdLinesVec);
 			LsdStorage.push_back(LsdLines);
@@ -1906,7 +1455,7 @@ int main() {
 		for (int i = 2; i >= 0; i--) {
 			cv::Mat currentIm = imageStorage[i].clone();
 			vector<Line> LSDLines = LsdStorage[i];
-		
+
 			for (auto & l : LSDLines) {
 				cv::Scalar blaColor;
 				if (i == 2) {
@@ -1922,7 +1471,7 @@ int main() {
 				auto end = cv::Point(l.end.x, l.end.y);
 				cv::line(currentIm, begin, end, blaColor, 3);
 			}
-		
+
 			if (i != 2) {
 				for (int j = 0; j < component.rows; j++)
 				{
@@ -1940,7 +1489,7 @@ int main() {
 								currentIm.at<cv::Vec3b>(j, k) = bgrPixel;
 							}
 						}
-					
+
 					}
 				}
 			}
@@ -1976,8 +1525,8 @@ int main() {
 		cv::imshow(std::to_string(-1), currentIm);
 		cv::waitKey();
 		//A
-		
-		*/
+
+
 
 
 
@@ -1987,7 +1536,7 @@ int main() {
 		for (int i = 0; i < 2; ++i) {
 			lines = unordered_map<int, Line>();
 			ExtendLines(image, LSDLines, lines);
-			//ExtendLinesReversalMove(image, LSDLines, lines); //РѕР±СЂР°С‚РЅС‹Р№ С…РѕРґ
+			//ExtendLinesReversalMove(image, LSDLines, lines); //обратный ход
 			LSDLines = vector<Line>();
 			LSDLines.resize(lines.size());
 			cout << "reduced on iteration " << i << " lines count: " << lines.size() << endl;
@@ -1996,13 +1545,14 @@ int main() {
 				if (p.second.norm() >(noiseFilterConst*maxX / 100)) {
 					LSDLines.push_back(p.second);
 				}
->>>>>>> Stashed changes
 			}
 		}
 		auto dt = chrono::duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now().time_since_epoch() - t1).count();
 		cout << "it took " << dt << endl; // 247ms for 10 iterations, 10ms for one iteration, 35ms for 2 on one core
 
+										  ///DEBUG_BEGIN
 		ShowJoinedLines(image, lines);
+		///DEBUG_END
 
 		for (auto &p : LSDLines) {
 			Line temp = p;
@@ -2010,17 +1560,13 @@ int main() {
 			ExtendedLinesVector.push_back(temp.end);
 		}
 	}
-	
+
 	else {
 		getLsdLines(image, LSDLines, numLinesDetected, LsdLinesVector);
-		image = original.clone(); //danger
 
-<<<<<<< Updated upstream
-									  ///DEBUG_BEGIN
-	ShowJoinedLines(image, lines);
-	///DEBUG_END
-=======
->>>>>>> Stashed changes
+		/*
+		Line mainLine = Line(cv::Point3f(39, 123, 0), cv::Point3f(174, 124, 0), 0);
+		LSDLines.push_back(mainLine);*/
 
 		Line leftVerticalLine = Line(cv::Point3f(0, 0, 0), cv::Point3f(0, maxY, 0), 10000);
 		Line rightVerticalLine = Line(cv::Point3f(maxX, 0, 0), cv::Point3f(maxX, maxY, 0), 20000);
@@ -2053,7 +1599,7 @@ int main() {
 					double A2 = other.begin.y - other.end.y;
 					double B2 = other.end.x - other.begin.x;
 					double C2 = other.begin.x*other.end.y - other.end.x*other.begin.y;
-					if ((A1*B2 - A2*B1) != 0) { //РµСЃР»Рё Р»РёРЅРёРё РЅРµ РїР°СЂР°Р»Р»РµР»СЊРЅС‹
+					if ((A1*B2 - A2*B1) != 0) { //если линии не параллельны
 						double x = -(C1*B2 - C2*B1) / (A1*B2 - A2*B1);
 						double y = -(A1*C2 - A2*C1) / (A1*B2 - A2*B1);
 
@@ -2103,7 +1649,7 @@ int main() {
 
 		double extension_fac = 0.01;
 		double thresh = 15;
-		//РїСЂРѕРґР»РµРЅРёРµ
+		//продление
 		for (int i = 0; i < LSDLines.size(); i++) {
 			Line currentLine = LSDLines[i];
 
@@ -2231,20 +1777,19 @@ int main() {
 
 		ShowLSDLinesOnScreen(image, LSDLines, -1);
 		vector<Line> atata;
-		for (auto &p : LSDLines) {
-			Line temp = p;
-			if (p.norm() >= noiseFilterConst*maxX / 100) {
-				atata.push_back(p);
+		for (int k = 0; k < LSDLines.size() - 4; k++) {
+			Line temp = LSDLines[k];
+			if (temp.norm() >= noiseFilterConst*maxX / 100) {
+				atata.push_back(temp);
 				ExtendedLinesVector.push_back(temp.begin);
 				ExtendedLinesVector.push_back(temp.end);
 			}
 
 		}
-		LSDLines = atata;
 		ShowLSDLinesOnScreen(image, atata, -1);
+		
 	}
 
-	cout << "size: " << ExtendedLinesVector.size() << endl;
 	//Getting intersections
 	vector<PairOfTwoLines> LinePairsVector;
 	getLinePairs(ExtendedLinesVector, LinePairsVector);
@@ -2252,183 +1797,53 @@ int main() {
 
 	numLinesDetected = ExtendedLinesVector.size() / 2;
 
-	//RANSAC (РЅР°С…РѕРґРёРј СѓРіР»С‹ Р°Р»СЊС„Р° Рё Р±СЌС‚Р°)
-	uint maxRansacTrials = (uint)LinePairsVector.size(); //РјР°РєСЃРёРјР°Р»СЊРЅРѕРµ РєРѕР»РёС‡РµСЃС‚РІРѕ РёС‚РµСЂР°С†РёСЏ Р°Р»РіРѕСЂРёС‚РјР° RANSAC
+	//RANSAC (находим углы альфа и бэта)
+	uint maxRansacTrials = (uint)LinePairsVector.size(); //максимальное количество итерация алгоритма RANSAC
 	dlib::matrix<double, 0, 1> solution = RANSAC_(maxRansacTrials, countInlierThreshold, f, LinePairsVector, ExtendedLinesVector);
 	cout << "angle Alpha (in radians): " << solution(0) << endl << "angle Beta (in radians): " << solution(1) << endl;
 
-	//РџРѕР»СѓС‡Р°РµРј vanishing points
+	//Получаем vanishing points
 	vector<cv::Point3f> VanishingPoints;
-	getVanishingPoints(solution(0), solution(0), f, VanishingPoints);
-	
-	
-	VanishingPoints[0] = cv::Point3f(2000, maxY / 2, 0);
-	VanishingPoints[1] = cv::Point3f(maxX/2, 5000, 0);
-	VanishingPoints[2] = cv::Point3f(maxX/2, maxY/2, 0);
+	getVanishingPoints(solution(0), solution(1), f, VanishingPoints);
 
 	cv::Mat debi2 = image.clone();
-	
-	const cv::Scalar blaColor1 = cv::Scalar(255, 0, 0, 255);
+
+	const cv::Scalar blaColor1 = cv::Scalar(0, 0, 255, 255);
 	const cv::Scalar blaColor2 = cv::Scalar(0, 255, 0, 255);
-	const cv::Scalar blaColor3 = cv::Scalar(0, 0, 255, 255);
+	const cv::Scalar blaColor3 = cv::Scalar(255, 0, 0, 255);
 
 	auto a = cv::Point(VanishingPoints[0].x, VanishingPoints[0].y);
 	auto b = cv::Point(VanishingPoints[1].x, VanishingPoints[1].y);
 	auto c = cv::Point(VanishingPoints[2].x, VanishingPoints[2].y);
-	
+
 	cv::circle(debi2, a, 15, blaColor1, -1);
 	cv::circle(debi2, b, 15, blaColor2, -1);
 	cv::circle(debi2, c, 15, blaColor3, -1);
-	
+
 	cv::imshow("aaa", debi2);
 	cv::waitKey();
 
-	//РќР°С…РѕРґРёРј РЅР°РїСЂР°РІР»РµРЅРёРµ РєР°Р¶РґРѕР№ Р»РёРЅРёРё
-	vector<uint> DirectionsOfLines; //СЌР»РµРјРµРЅС‚ СЃ РЅРѕРјРµСЂРѕРј i РѕР·РЅР°С‡Р°РµС‚ РЅР°РїСЂР°РІР»РµРЅРёРµ i-РѕР№ Р»РёРЅРёРё (0=x, 1=y, 2=z, 3=xy, 4=xz, 5=yz)
+	//Находим направление каждой линии
+	vector<uint> DirectionsOfLines; //элемент с номером i означает направление i-ой линии (0=x, 1=y, 2=z, 3=xy, 4=xz, 5=yz)
 	assignDirections(numLinesDetected, ExtendedLinesVector, VanishingPoints, DirectionsOfLines);
-	ShowLSDLinesOnScreenAssigned(image, LSDLines, -1, DirectionsOfLines);
+
+	//return 0;
 
 
 	/// Past
 	for (int i = 0; i < ExtendedLinesVector.size(); i++) {
 		ExtendedLinesVector[i].z = 0;
 	}
-	//Р’С‹РґРµР»СЏРµРј РІСЃРµ Р·Р°РјРєРЅСѓС‚С‹Рµ РѕР±Р»Р°СЃС‚Рё
+	//Выделяем все замкнутые области
 	vector<vector<uint> > PolygonsVector;
-<<<<<<< Updated upstream
-	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector, true, image, distanceEpsilon);
-
-
-=======
 	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector, true, image, distanceEpsilon, AngleEpsilon);
 
-	
-	if (overwrite) {
 
-		///TEST CASE BEGIN
-		std::vector<cv::Point3f> LsdLinesTest;
-		std::vector<uint> DirectionsTest;
-		std::vector<vector<uint>> PolygonsTest;
-
-		LsdLinesTest.push_back(cv::Point3f(250, 540, 0));
-		LsdLinesTest.push_back(cv::Point3f(458, 299, 0));
-		DirectionsTest.push_back(2);
-
-		LsdLinesTest.push_back(cv::Point3f(458, 247, 0));
-		LsdLinesTest.push_back(cv::Point3f(458, 299, 0));
-		DirectionsTest.push_back(1);
-
-		LsdLinesTest.push_back(cv::Point3f(181, 0, 0));
-		LsdLinesTest.push_back(cv::Point3f(458, 247, 0));
-		DirectionsTest.push_back(2);
-
-		LsdLinesTest.push_back(cv::Point3f(181, 0, 0));
-		LsdLinesTest.push_back(cv::Point3f(250, 540, 0));
-		DirectionsTest.push_back(1);
-
-		vector<uint> currentVec; currentVec.push_back(0); currentVec.push_back(1); currentVec.push_back(2); currentVec.push_back(3);
-		PolygonsTest.push_back(currentVec);
-
-		LsdLinesTest.push_back(cv::Point3f(458, 299, 0));
-		LsdLinesTest.push_back(cv::Point3f(513, 299, 0));
-		DirectionsTest.push_back(0);
-
-		LsdLinesTest.push_back(cv::Point3f(513, 247, 0));
-		LsdLinesTest.push_back(cv::Point3f(513, 299, 0));
-		DirectionsTest.push_back(1);
-
-		LsdLinesTest.push_back(cv::Point3f(458, 247, 0));
-		LsdLinesTest.push_back(cv::Point3f(513, 247, 0));
-		DirectionsTest.push_back(0);
-
-		currentVec.clear(); currentVec.push_back(4); currentVec.push_back(5); currentVec.push_back(6); currentVec.push_back(1);
-		PolygonsTest.push_back(currentVec);
-
-		LsdLinesTest.push_back(cv::Point3f(513, 247, 0));
-		LsdLinesTest.push_back(cv::Point3f(816, 0, 0));
-		DirectionsTest.push_back(2);
-
-		LsdLinesTest.push_back(cv::Point3f(181, 0, 0));
-		LsdLinesTest.push_back(cv::Point3f(816, 0, 0));
-		DirectionsTest.push_back(0);
-
-		currentVec.clear(); currentVec.push_back(6); currentVec.push_back(2); currentVec.push_back(7); currentVec.push_back(8);
-		PolygonsTest.push_back(currentVec);
-
-		LsdLinesTest.push_back(cv::Point3f(513, 299, 0));
-		LsdLinesTest.push_back(cv::Point3f(746, 542, 0));
-		DirectionsTest.push_back(2);
-
-		LsdLinesTest.push_back(cv::Point3f(746, 542, 0));
-		LsdLinesTest.push_back(cv::Point3f(816, 0, 0));
-		DirectionsTest.push_back(1);
-
-		currentVec.clear(); currentVec.push_back(5); currentVec.push_back(7); currentVec.push_back(9); currentVec.push_back(10);
-		PolygonsTest.push_back(currentVec);
-
-		LsdLinesTest.push_back(cv::Point3f(250, 542, 0));
-		LsdLinesTest.push_back(cv::Point3f(746, 542, 0));
-		DirectionsTest.push_back(0);
-
-		currentVec.clear(); currentVec.push_back(9); currentVec.push_back(4); currentVec.push_back(0); currentVec.push_back(11);
-		PolygonsTest.push_back(currentVec);
-
-
-		LsdLinesTest.push_back(cv::Point3f(0, 542, 0));
-		LsdLinesTest.push_back(cv::Point3f(250, 542, 0));
-		DirectionsTest.push_back(0);
-
-		LsdLinesTest.push_back(cv::Point3f(0, 0, 0));
-		LsdLinesTest.push_back(cv::Point3f(0, 542, 0));
-		DirectionsTest.push_back(1);
-
-		LsdLinesTest.push_back(cv::Point3f(0, 0, 0));
-		LsdLinesTest.push_back(cv::Point3f(181, 0, 0));
-		DirectionsTest.push_back(0);
-
-		currentVec.clear(); currentVec.push_back(3); currentVec.push_back(12); currentVec.push_back(13); currentVec.push_back(14);
-		PolygonsTest.push_back(currentVec);
-
-		LsdLinesTest.push_back(cv::Point3f(746, 542, 0));
-		LsdLinesTest.push_back(cv::Point3f(968, 542, 0));
-		DirectionsTest.push_back(0);
-
-		LsdLinesTest.push_back(cv::Point3f(968, 0, 0));
-		LsdLinesTest.push_back(cv::Point3f(968, 542, 0));
-		DirectionsTest.push_back(1);
-
-		LsdLinesTest.push_back(cv::Point3f(816, 0, 0));
-		LsdLinesTest.push_back(cv::Point3f(968, 0, 0));
-		DirectionsTest.push_back(0);
-
-		currentVec.clear(); currentVec.push_back(10); currentVec.push_back(15); currentVec.push_back(16); currentVec.push_back(17);
-		PolygonsTest.push_back(currentVec);
-
-
-
-
-
-
-
-		///Overwriting begin
-		PolygonsVector.swap(PolygonsTest);
-		ExtendedLinesVector.swap(LsdLinesTest);
-		LsdLinesVector = ExtendedLinesVector;
-		DirectionsOfLines.swap(DirectionsTest);
-		numLinesDetected = LsdLinesVector.size();
-		///Overwriting end
-		///TEST CASE END
-
-	}
-	
-	
-	
->>>>>>> Stashed changes
-	//РЎРјРѕС‚СЂРёРј СЃРєРѕР»СЊРєРѕ РїРёРєСЃРµР»РµР№ РІ РєР°Р¶РґРѕР№ РѕР±Р»Р°СЃС‚Рё
+	//Смотрим сколько пикселей в каждой области
 	vector<int> NumbersOfPixelsInArea;
 	getNumbersOfPixels(image, PolygonsVector, numLinesDetected, ExtendedLinesVector, NumbersOfPixelsInArea);
 
-	//Р—Р°РїРѕРјРёРЅР°РµРј РєР°РєРёРµ РѕР±Р»Р°СЃС‚Рё СЃ РєРµРј СЏРІР»СЏСЋС‚СЃСЏ СЃРѕСЃРµРґРЅРёРјРё
+	//Запоминаем какие области с кем являются соседними
 	int sizeOfPolInter = PolygonsVector.size();
 	bool **PolygonIntersections = new bool *[sizeOfPolInter];;
 	for (int j = 0; j < sizeOfPolInter; j++) {
@@ -2441,28 +1856,18 @@ int main() {
 	}
 	getIntersections(PolygonsVector, PolygonIntersections);
 
-	//РџРѕР»СѓС‡Р°РµРј РЅРѕСЂРјР°Р»Рё
+	//Получаем нормали
 	vector<uint> PlaneNormals;
 	getNormals(PlaneNormals, numLinesDetected, LsdLinesVector, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, NumbersOfPixelsInArea, PolygonIntersections);
 
-
-
-
-	//РџРѕР»СѓС‡Р°РµРј РіР»СѓР±РёРЅС‹
-<<<<<<< Updated upstream
-	t1 = chrono::high_resolution_clock::now().time_since_epoch();
-	cv::Mat Depths;
-	getDepths(focal_length, PlaneNormals, numLinesDetected, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, PolygonIntersections, Depths);
-	dt = chrono::duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now().time_since_epoch() - t1).count();
-	cout << "it took " << dt << " milliseconds to get depths" << endl;
-
-=======
-	cv::Mat Depths;
-	getDepths(focal_length, PlaneNormals, numLinesDetected, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, PolygonIntersections, Depths);
-
 	using namespace cv;
+
 	cv::Mat overlay = image.clone();
->>>>>>> Stashed changes
+
+
+	//Получаем глубины
+	cv::Mat Depths;
+	getDepths(focal_length, PlaneNormals, numLinesDetected, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, PolygonIntersections, Depths);
 	for (int i = 0; i < PolygonsVector.size(); i++) {
 		vector<uint> bla = PolygonsVector[i];
 		uint index1 = bla[0];
@@ -2491,31 +1896,17 @@ int main() {
 		int val2 = rand() % 255;
 		int val3 = rand() % 255;
 
-		if (!differentColors) {
-			val1 = 50; val2 = 50; val3 = 50;
-		}
-
 		if (PlaneNormals[i] == 0) {
-			blaColor = cv::Scalar(255, val2 - 50, 0);
+			blaColor = cv::Scalar(255, val2-50, 0);
 		}
 		else if (PlaneNormals[i] == 1) {
-<<<<<<< Updated upstream
-			blaColor = cv::Scalar(0, 0, 255, 255);
+			blaColor = cv::Scalar(0, 255, val3-50);
 		}
 		else {
-			blaColor = cv::Scalar(0, 255, 0, 255);
-=======
-			blaColor = cv::Scalar(0, 255, val3 - 50);
-		}
-		else {
-			blaColor = cv::Scalar(val1 - 50, 0, 255);
+			blaColor = cv::Scalar(val1-50, 0, 255);
 		}
 		cv::fillConvexPoly(overlay, &contour[0], contour.size(), blaColor);
 		double alpha = 0.3;
-		if (!differentColors) {
-			alpha = 0.1;
->>>>>>> Stashed changes
-		}
 		cv::addWeighted(image, alpha, overlay, 1 - alpha, 0, overlay);
 
 	}
