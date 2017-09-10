@@ -134,31 +134,16 @@ void write_eps(double* segs, int n, int dim, char* filename, int xsize, int ysiz
 	fprintf(eps, "showpage\n");
 	fprintf(eps, "%%%%EOF\n");
 }
-class NearestLine {
-public:
-	int index;
-	double dist;
-	NearestLine(int a, double b) {
-		index = a;
-		dist = b;
-	}
-};
 
 //LSD
 double* DoLSD(cv::Mat image, int& numLines) {
 	//Конвертация изображения для последующего применения алгоритма LSD
 	cv::Mat grayscaleMat(image.size(), CV_8U);
 	auto im = image.clone();
-<<<<<<< Updated upstream
-	cv::cvtColor(im, grayscaleMat, CV_BGR2GRAY);
-
-
-=======
 	
 	//cv::cvtColor(im, grayscaleMat, CV_BGR2GRAY); //danger
 	grayscaleMat = image.clone(); //danger
 	
->>>>>>> Stashed changes
 	/////////////////////////
 	Canny(grayscaleMat, grayscaleMat, 50, 200, 3, true);
 	vector<cv::Vec4i> lines;
@@ -195,17 +180,6 @@ double* DoLSD(cv::Mat image, int& numLines) {
 	return outArray;
 }
 
-<<<<<<< Updated upstream
-//Округление до целого по правилам округления
-double RoundTo(double x) {
-	int y = floor(x);
-	if ((x - y) >= 0.5)
-		y++;
-	return (double)y;
-}
-
-=======
->>>>>>> Stashed changes
 class Line {
 public:
 	cv::Point3f begin;
@@ -220,216 +194,6 @@ public:
 	};
 };
 
-<<<<<<< Updated upstream
-class PairOfTwoLines {
-public:
-	uint FirstIndex;
-	uint SecondIndex;
-
-	PairOfTwoLines(uint a, uint b) {
-		FirstIndex = a;
-		SecondIndex = b;
-	}
-
-	PairOfTwoLines() {
-		FirstIndex = 0;
-		SecondIndex = 0;
-	}
-};
-
-class LineScore {
-public:
-	uint goodPoints;
-	uint totalPoints;
-	uint LineIndex;
-
-	LineScore(uint a, uint b, uint c) {
-		goodPoints = a;
-		LineIndex = c;
-		totalPoints = b;
-	}
-};
-
-//Для сортировки
-bool comparator(const LineScore l, const LineScore r) {
-	double score1 = 0;
-	double score2 = 0;
-	if (l.totalPoints != 0) { score1 = double(l.goodPoints) / l.totalPoints; }
-	if (r.totalPoints != 0) { score2 = double(r.goodPoints) / r.totalPoints; }
-	return score1 > score2;
-}
-
-//Рандомное вещ. в интервале от a до b
-float RandomFloat(float a, float b) {
-	float random = ((float)rand()) / (float)RAND_MAX;
-	float diff = b - a;
-	float r = random * diff;
-	return a + r;
-}
-
-//Рандомное положительное целое в интервале от a до b
-uint RandomInt(uint a, uint b) {
-	uint output = a + (rand() % (uint)(b - a + 1));
-	return output;
-}
-
-//Intrinsic matrix
-cv::Mat K_inv(double f) {
-	double temp[3][3] = { { f, 0, 0 },{ 0, f, 0 },{ 0, 0, 1 } };
-	cv::Mat k = cv::Mat(3, 3, CV_64F, temp);
-	return k.inv();
-}
-
-//Ищет номер линии по координатам точки
-int FindIndexOfLine(vector<cv::Point3f> vec, cv::Point3f point) {
-	auto position = find_if(vec.begin(), vec.end(), [&](const cv::Point3f& a) { return a.x == point.x && a.y == point.y; });
-	if (position != vec.end()) {
-		int index = (position - vec.begin()) / 2;
-		return index;
-	}
-	return -1;
-}
-
-//Cost функция, которую минимизируем для расчета углов alpha и beta
-class cost_function {
-private:
-
-public:
-	cv::Mat lineOne;
-	cv::Mat lineTwo;
-	cv::Mat lineThree;
-	cv::Mat lineFour;
-	cv::Mat K_inverted;
-
-	cost_function(double f, cv::Point3f a, cv::Point3f b, cv::Point3f c, cv::Point3f d, cv::Point3f e, cv::Point3f ff, cv::Point3f g, cv::Point3f h) {
-		lineOne = cv::Mat(b - a);
-		lineOne.convertTo(lineOne, CV_64F);
-		lineTwo = cv::Mat(d - c);
-		lineTwo.convertTo(lineTwo, CV_64F);
-		lineThree = cv::Mat(ff - e);
-		lineThree.convertTo(lineThree, CV_64F);
-		lineFour = cv::Mat(h - g);
-		lineFour.convertTo(lineFour, CV_64F);
-		K_inverted = K_inv(f);
-	}
-
-	double operator()(const dlib::matrix<double, 0, 1>& arg) const {
-		double summ = 0;
-
-		double r_x_array[3][3] = { { 1, 0, 0 },{ 0, cos(arg(0)), -sin(arg(0)) },{ 0, sin(arg(0)), cos(arg(0)) } };
-		cv::Mat R_x = cv::Mat(3, 3, CV_64F, r_x_array);
-		double r_y_array[3][3] = { { cos(arg(1)), 0, sin(arg(1)) },{ 0, 1, 0 },{ -sin(arg(1)), 0, cos(arg(1)) } };
-		cv::Mat R_y = cv::Mat(3, 3, CV_64F, r_y_array);
-		cv::Mat H = R_y * R_x * K_inverted;
-		cv::Mat H_t = H.t();
-
-		cv::Mat l_1 = H_t * lineOne;
-		cv::normalize(l_1, l_1);
-		l_1.resize(2);
-
-		cv::Mat l_2 = H_t * lineTwo;
-		cv::normalize(l_2, l_2);
-		l_2.resize(2);
-
-		cv::Mat l_3 = H_t * lineThree;
-		cv::normalize(l_3, l_3);
-		l_3.resize(2);
-
-		cv::Mat l_4 = H_t * lineFour;
-		cv::normalize(l_4, l_4);
-		l_4.resize(2);
-
-		cv::Mat multiply_one_mat = l_1.t() * l_2;
-		cv::Mat multiply_two_mat = l_3.t() * l_4;
-		summ += multiply_one_mat.at<double>(0, 0) * multiply_one_mat.at<double>(0, 0) + multiply_two_mat.at<double>(0, 0) * multiply_two_mat.at<double>(0, 0);
-		return summ;
-	}
-};
-
-//Минимизация cost function для двух пар пересекающихся линий
-dlib::matrix<double, 0, 1> minimize_C(double f, cv::Point3f a, cv::Point3f b, cv::Point3f c, cv::Point3f d, cv::Point3f e, cv::Point3f ff, cv::Point3f g, cv::Point3f h) {
-	dlib::matrix<double, 0, 1> solution(2);
-	solution = 0, 0;
-	find_min_bobyqa(cost_function(f, a, b, c, d, e, ff, g, h),
-		solution,
-		5, // number of interpolation points
-		dlib::uniform_matrix<double>(2, 1, -M_PI / 2), // lower bound constraint
-		dlib::uniform_matrix<double>(2, 1, M_PI / 2), // upper bound constraint
-		M_PI / 10, // initial trust region radius
-		0.001, // stopping trust region radius
-		100 // max number of objective function evaluations
-	);
-	return solution;
-}
-
-//Считает сколько пар линий стало ортогональными при найденных alpha и beta
-uint countInlierScore(dlib::matrix<double, 0, 1> solution, double threshold, double f, vector<PairOfTwoLines> LinePairsVector, vector<cv::Point3f> ExtendedLinesVector) {
-	uint score = 0;
-	cv::Mat K_inverted = K_inv(f);
-	double temp[3][3] = { { 1, 0, 0 },{ 0, cos(solution(0)), -sin(solution(0)) },{ 0, sin(solution(0)), cos(solution(0)) } };
-	cv::Mat R_x = cv::Mat(3, 3, CV_64F, temp);
-	double temp2[3][3] = { { cos(solution(1)), 0, sin(solution(1)) },{ 0, 1, 0 },{ -sin(solution(1)), 0, cos(solution(1)) } };
-	cv::Mat R_y = cv::Mat(3, 3, CV_64F, temp2);
-	cv::Mat H = R_y * R_x * K_inverted;
-	cv::Mat H_t = H.t();
-	for (int i = 0; i < LinePairsVector.size(); i++) {
-		PairOfTwoLines pair = LinePairsVector[i];
-		cv::Vec3f lineOne = ExtendedLinesVector[2 * pair.FirstIndex + 1] - ExtendedLinesVector[2 * pair.FirstIndex];
-		cv::Vec3f lineTwo = ExtendedLinesVector[2 * pair.SecondIndex + 1] - ExtendedLinesVector[2 * pair.SecondIndex];
-
-		cv::Mat first_line = cv::Mat(lineOne);
-		first_line.convertTo(first_line, CV_64F);
-		cv::Mat second_line = cv::Mat(lineTwo);
-		second_line.convertTo(second_line, CV_64F);
-
-		cv::Mat l_1 = H_t * first_line;
-		cv::normalize(l_1, l_1);
-		l_1.resize(2);
-
-		cv::Mat l_2 = H_t * second_line;
-		cv::normalize(l_2, l_2);
-		l_2.resize(2);
-
-		cv::Mat multiply_one_mat = l_1.t() * l_2;
-		double summ = multiply_one_mat.at<double>(0, 0) * multiply_one_mat.at<double>(0, 0);
-		if (summ <= threshold) { score++; }
-	}
-	return score;
-}
-
-//Алгоритм RANSAC (берет рандомные пары линий, делает минимизацию и считает сколько пар стало ортогональными, потом выбирает лучшее решение
-dlib::matrix<double, 0, 1> RANSAC(uint maxTrials, double threshold, double f, vector<PairOfTwoLines> LinePairsVector, vector<cv::Point3f> ExtendedLinesVector) {
-	uint counter = 0;
-	uint bestScore = 0;
-	dlib::matrix<double, 0, 1> bestSolution(2);
-	while (counter < maxTrials) {
-		uint first_index = RandomInt(0, LinePairsVector.size() - 1);
-		uint second_index = first_index;
-		while (second_index == first_index) { second_index = RandomInt(0, LinePairsVector.size() - 1); }
-		PairOfTwoLines pairOne = LinePairsVector[first_index];
-		PairOfTwoLines pairTwo = LinePairsVector[second_index];
-		cv::Point3f a = ExtendedLinesVector[2 * pairOne.FirstIndex];
-		cv::Point3f b = ExtendedLinesVector[2 * pairOne.FirstIndex + 1];
-		cv::Point3f c = ExtendedLinesVector[2 * pairOne.SecondIndex];
-		cv::Point3f d = ExtendedLinesVector[2 * pairOne.SecondIndex + 1];
-		cv::Point3f e = ExtendedLinesVector[2 * pairTwo.FirstIndex];
-		cv::Point3f ff = ExtendedLinesVector[2 * pairTwo.FirstIndex + 1];
-		cv::Point3f g = ExtendedLinesVector[2 * pairTwo.SecondIndex];
-		cv::Point3f h = ExtendedLinesVector[2 * pairTwo.SecondIndex + 1];
-
-		dlib::matrix<double, 0, 1> solution = minimize_C(f, a, b, c, d, e, ff, g, h);
-		uint score = countInlierScore(solution, threshold, f, LinePairsVector, ExtendedLinesVector);
-		if (score > bestScore) {
-			bestScore = score;
-			bestSolution = solution;
-		}
-		counter++;
-	}
-	cout << "Number of inliers: " << bestScore << endl;
-	return bestSolution;
-}
-=======
->>>>>>> Stashed changes
 
 //http://stackoverflow.com/questions/16792751/hashmap-for-2d3d-coordinates-i-e-vector-of-doubles
 struct hashFunc {
@@ -498,15 +262,6 @@ void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVec
 		double cosZ = abs(line.dot(lineToZ) / (cv::norm(line) * cv::norm(lineToZ)));
 
 		uint result;
-<<<<<<< Updated upstream
-		if (cosX <= 0.9 && cosY <= 0.9 && abs(cosX - cosY) < 0.01) { result = 3; }
-		else if (cosX <= 0.9 && cosZ <= 0.9 && abs(cosX - cosZ) < 0.01) { result = 4; }
-		else if (cosY <= 0.9 && cosZ <= 0.9 && abs(cosY - cosZ) < 0.01) { result = 5; }
-		else if (cosX <= 0.9) { result = 0; }
-		else if (cosY <= 0.9) { result = 1; }
-		else
-			if (cosZ <= 0.9) { result = 2; }
-=======
 		if (cosX <= 0.9 && cosY <= 0.9 && abs(cosX - cosY) < 0.01) { result = 3;}
 		else if (cosX >= 0.95 && cosZ >= 0.95 && abs(cosX - cosZ) < 0.01) { result = 4; }
 		else if (cosY >= 0.95 && cosZ >= 0.95 && abs(cosY - cosZ) < 0.01) { result = 5; }
@@ -514,16 +269,11 @@ void assignDirections(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVec
 		else if (cosZ >= 0.90) { result = 2; }
 		else
 			if (cosY >= 0.90) { result = 1; }
->>>>>>> Stashed changes
 		output.push_back(result);
 	}
 }
 
-<<<<<<< Updated upstream
-void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, double AngleTolerance, double step, double radius, vector<vector<uint> >& PolygonsVector, bool debugFlag, cv::Mat image, double distanceEpsilon) {
-=======
 void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, double AngleTolerance, double step, double radius, vector<vector<uint> >& PolygonsVector, bool debugFlag, cv::Mat image, double distanceEpsilon, double AngleEpsilon) {
->>>>>>> Stashed changes
 	//Выделение групп параллельных линий
 	vector<vector<uint> > ParallelLineGroups;
 	vector<uint> FirstGroup;
@@ -693,11 +443,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 								if (debugFlag) {
 									cv::Vec3f lineA = leftLineEndPoint - leftLineBeginPoint;
 									double cos = abs(lineA.dot(line) / (cv::norm(line) * cv::norm(lineA)));
-<<<<<<< Updated upstream
-									if (cosAngle < 0.5) { currentBeginScores[index].goodPoints++; }
-=======
 									if (cosAngle < AngleEpsilon) { currentBeginScores[index].goodPoints++; }
->>>>>>> Stashed changes
 								}
 								else {
 									if (cosAngle > 0.95) { //фильтрация совсем трешовых вариантов
@@ -738,11 +484,7 @@ void getPolygons(int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, 
 								if (debugFlag) {
 									cv::Vec3f lineA = leftLineEndPoint - leftLineBeginPoint;
 									double cos = abs(lineA.dot(line) / (cv::norm(line) * cv::norm(lineA)));
-<<<<<<< Updated upstream
-									if (cosAngle < 0.5) { currentEndScores[index].goodPoints++; }
-=======
 									if (cosAngle < AngleEpsilon) { currentEndScores[index].goodPoints++; }
->>>>>>> Stashed changes
 
 								}
 								else {
@@ -1509,164 +1251,8 @@ void getSkeleton(cv::Mat img, cv::Mat& result) {
 	result = skel.clone();
 }
 
-<<<<<<< Updated upstream
-void solveSystem(cv::Mat input, cv::Mat &output) {
-	cv::Mat S, U, Vt;
-	cv::SVD::compute(input, S, U, Vt, cv::SVD::FULL_UV);
-
-	cv::Mat V;
-	cv::transpose(Vt, V);
-
-	int lastColumn = V.cols - 1;
-	cv::Mat lastColumnMatrix = V.col(lastColumn).clone();
-	output = lastColumnMatrix.clone();
-}
-
-void getDepths(double focal, vector<uint>& PlaneNormals, int numLinesDetected, vector<cv::Point3f> ExtendedLinesVector, vector<uint> DirectionsOfLines, vector<vector<uint> > PolygonsVector, bool** PolygonIntersections, cv::Mat &Depths) {
-
-	vector<vector<double>> input;
-
-	for (int i = 0; i < PolygonsVector.size() - 1; i++) {
-		for (int j = i + 1; j < PolygonsVector.size(); j++) {
-			if (PolygonIntersections[i][j] == 1) {
-				//Получение вектора нормали i-ого сегмента
-				int normal_i = PlaneNormals[i];
-				cv::Mat norm_i;
-				switch (normal_i)
-				{
-				case 0:
-					norm_i = (cv::Mat_<double>(1, 3) << 1, 0, 0);
-					break;
-				case 1:
-					norm_i = (cv::Mat_<double>(1, 3) << 0, 1, 0);
-					break;
-				case 2:
-					norm_i = (cv::Mat_<double>(1, 3) << 0, 0, 1);
-					break;
-				}
-
-				//Получение вектора нормали j-ого сегмента
-				int normal_j = PlaneNormals[j];
-				cv::Mat norm_j;
-				switch (normal_j)
-				{
-				case 0:
-					norm_j = (cv::Mat_<double>(1, 3) << 1, 0, 0);
-					break;
-				case 1:
-					norm_j = (cv::Mat_<double>(1, 3) << 0, 1, 0);
-					break;
-				case 2:
-					norm_j = (cv::Mat_<double>(1, 3) << 0, 0, 1);
-					break;
-				}
-
-				//Получение вектора общей линии (пересечения)
-				cv::Mat K_inverted = K_inv(focal);
-				cv::Mat commonLine;
-
-				vector<uint> planeA = PolygonsVector[i];
-				vector<uint> planeB = PolygonsVector[j];
-				for (int k1 = 0; k1 < planeA.size(); k1++) {
-					for (int k2 = 0; k2 < planeB.size(); k2++) {
-						if (planeA[k1] == planeB[k2]) {
-							//Преобразование point3f в mat
-							cv::Point3f commonPoint = ExtendedLinesVector[2 * planeA[k1] + 1];
-							double temporaryArray[3][1] = { { commonPoint.x },{ commonPoint.y },{ commonPoint.z } };
-							cv::Mat commonPointMatrix = cv::Mat(3, 1, CV_64F, temporaryArray);
-							commonLine = K_inverted*commonPointMatrix;
-						}
-					}
-				}
-
-
-				vector<double> row(PolygonsVector.size(), 0); //создание вектора, заполненного нулями
-				cv::Mat OneElementMat_1 = norm_j*commonLine;
-				row[i] = OneElementMat_1.at<double>(0, 0);
-				cv::Mat OneElementMat_2 = -1 * norm_i*commonLine;
-				row[j] = OneElementMat_2.at<double>(0, 0);
-
-				input.push_back(row);
-			}
-		}
-	}
-	//Преобразуем вектор векторов в двумерный массив
-	int verticalSize = input.size();
-	if (verticalSize != 0) {
-		int horizontalSize = input[0].size();
-		double **inputArray = new double *[verticalSize];;
-		for (int j = 0; j < verticalSize; j++) {
-			inputArray[j] = new double[horizontalSize];
-		}
-		for (int i = 0; i < verticalSize; i++) {
-			for (int j = 0; j < horizontalSize; j++) {
-				inputArray[i][j] = input[i][j];
-			}
-		}
-		cv::Mat inputMat = cv::Mat(verticalSize, horizontalSize, CV_32F, inputArray);
-		solveSystem(inputMat, Depths);
-	}
-}
-
-
-int main() {
-	clock_t tStart = clock();
-	srand(time(0)); //чтобы последовательность рандомных чисел была всегда уникальна при новом запуске
-
-					//Переменные для настройки
-	double focal_length = 4; //фокальное расстояние в mm
-	double sensor_width = 4.59; //ширина сенсора в mm
-	double ExtendThreshold = 0.01; //порог отклонения линии (для удлинения)
-	double countInlierThreshold = 0.0001; //если квадрат скалярного произведения двух линий меньше этого числа, то мы считаем эти линии ортогональными
-	double noiseFilterConst = 2.9;
-
-	double AngleTolerance = 0.0001; //если abs(tg(angle1) - tg(angle2)) < AngleTolerance, то эти две линии объединяются в одну группу (параллельных линий с некоторой степенью толерантности)
-	double distanceEpsilon = 50;
-	double step = 6; //шаг для дискритизации линий
-	double radius = 20; //радиус поиска около точек соединительных линий
-
-	uint ResizeIfMoreThan = 1280; //если ширина или высота изображения больше этого числа, то мы меняем размер изображения
-	bool debug = 1;
-
-	//Открытие изображения
-	auto src = "TestNumberTwo.jpg";
-	cv::Mat erodedImage;
-	erosion(src, erodedImage); //эрозия
-	cv::imshow("Eroded image", erodedImage);
-	BrightnessAndContrastAuto(erodedImage, erodedImage, 75);
-	cv::imshow("Eroded image Contrast", erodedImage);
-	cv::Mat skeleton;
-	getSkeleton(erodedImage, skeleton); //получение скелета
-	cv::imshow("skeleton", skeleton);
-
-	cv::imwrite("skeleton.jpg", skeleton);
-
-	cv::Mat image;
-	image = cv::imread("skeleton.jpg", CV_LOAD_IMAGE_COLOR);
-
-	//Изменение размера
-	uint maxRes = max(image.cols, image.rows);
-	if (maxRes > ResizeIfMoreThan) {
-		float scaleFactor = float(ResizeIfMoreThan) / maxRes;
-		cv::Size size = cv::Size(image.cols * scaleFactor, image.rows * scaleFactor);
-		cv::resize(image, image, size, 0, 0, CV_INTER_CUBIC);
-	}
-	//BrightnessAndContrastAuto(image, image, 25);
-
-	//Границы кадра
-	uint maxX = image.cols;
-	uint maxY = image.rows;
-
-	//Фокальное расстояние
-	double temp_focal = maxX * focal_length / sensor_width;
-	uint f = (uint)temp_focal; //фокальное расстояние в пикселях
-
-							   //LSD
-	int numLinesDetected;
-=======
 void getLsdLines(cv::Mat image, vector<Line> &LsdLines, int &numLinesDetected, vector<cv::Point3f> &outputLsdLinesVector) {
 	//LSD
->>>>>>> Stashed changes
 	double* LsdLinesArray = DoLSD(image, numLinesDetected);
 	cout << "Number of LSD lines detected: " << numLinesDetected << endl;
 
@@ -1774,26 +1360,6 @@ int main() {
 	bool overwrite = 0; //использовать ручные данные для тестового подсчета нормалей
 	bool differentColors = 1;
 
-<<<<<<< Updated upstream
-	unordered_map<int, Line> lines;
-
-	///DEBUG_BEGIN
-	ShowLSDLinesOnScreen(image, LSDLines);
-	///DEBUG_END
-	auto t1 = chrono::high_resolution_clock::now().time_since_epoch();
-
-	for (int i = 0; i < 2; ++i) {
-		lines = unordered_map<int, Line>();
-		ExtendLines(image, LSDLines, lines);
-		//ExtendLinesReversalMove(image, LSDLines, lines); //обратный ход
-		LSDLines = vector<Line>();
-		LSDLines.resize(lines.size());
-		cout << "reduced on iteration " << i << " lines count: " << lines.size() << endl;
-		for (auto &p : lines) {
-			//noise filter
-			if (p.second.norm() >(noiseFilterConst*maxX / 100)) {
-				LSDLines.push_back(p.second);
-=======
 	//Открытие изображения
 	auto src = "usecase_2.png";
 	cv::Mat image;
@@ -1996,7 +1562,6 @@ int main() {
 				if (p.second.norm() >(noiseFilterConst*maxX / 100)) {
 					LSDLines.push_back(p.second);
 				}
->>>>>>> Stashed changes
 			}
 		}
 		auto dt = chrono::duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now().time_since_epoch() - t1).count();
@@ -2015,12 +1580,6 @@ int main() {
 		getLsdLines(image, LSDLines, numLinesDetected, LsdLinesVector);
 		image = original.clone(); //danger
 
-<<<<<<< Updated upstream
-									  ///DEBUG_BEGIN
-	ShowJoinedLines(image, lines);
-	///DEBUG_END
-=======
->>>>>>> Stashed changes
 
 		Line leftVerticalLine = Line(cv::Point3f(0, 0, 0), cv::Point3f(0, maxY, 0), 10000);
 		Line rightVerticalLine = Line(cv::Point3f(maxX, 0, 0), cv::Point3f(maxX, maxY, 0), 20000);
@@ -2295,11 +1854,6 @@ int main() {
 	}
 	//Выделяем все замкнутые области
 	vector<vector<uint> > PolygonsVector;
-<<<<<<< Updated upstream
-	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector, true, image, distanceEpsilon);
-
-
-=======
 	getPolygons(numLinesDetected, ExtendedLinesVector, AngleTolerance, step, radius, PolygonsVector, true, image, distanceEpsilon, AngleEpsilon);
 
 	
@@ -2423,7 +1977,6 @@ int main() {
 	
 	
 	
->>>>>>> Stashed changes
 	//Смотрим сколько пикселей в каждой области
 	vector<int> NumbersOfPixelsInArea;
 	getNumbersOfPixels(image, PolygonsVector, numLinesDetected, ExtendedLinesVector, NumbersOfPixelsInArea);
@@ -2449,20 +2002,11 @@ int main() {
 
 
 	//Получаем глубины
-<<<<<<< Updated upstream
-	t1 = chrono::high_resolution_clock::now().time_since_epoch();
-	cv::Mat Depths;
-	getDepths(focal_length, PlaneNormals, numLinesDetected, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, PolygonIntersections, Depths);
-	dt = chrono::duration_cast<chrono::milliseconds>(chrono::high_resolution_clock::now().time_since_epoch() - t1).count();
-	cout << "it took " << dt << " milliseconds to get depths" << endl;
-
-=======
 	cv::Mat Depths;
 	getDepths(focal_length, PlaneNormals, numLinesDetected, ExtendedLinesVector, DirectionsOfLines, PolygonsVector, PolygonIntersections, Depths);
 
 	using namespace cv;
 	cv::Mat overlay = image.clone();
->>>>>>> Stashed changes
 	for (int i = 0; i < PolygonsVector.size(); i++) {
 		vector<uint> bla = PolygonsVector[i];
 		uint index1 = bla[0];
@@ -2499,12 +2043,6 @@ int main() {
 			blaColor = cv::Scalar(255, val2 - 50, 0);
 		}
 		else if (PlaneNormals[i] == 1) {
-<<<<<<< Updated upstream
-			blaColor = cv::Scalar(0, 0, 255, 255);
-		}
-		else {
-			blaColor = cv::Scalar(0, 255, 0, 255);
-=======
 			blaColor = cv::Scalar(0, 255, val3 - 50);
 		}
 		else {
@@ -2514,7 +2052,6 @@ int main() {
 		double alpha = 0.3;
 		if (!differentColors) {
 			alpha = 0.1;
->>>>>>> Stashed changes
 		}
 		cv::addWeighted(image, alpha, overlay, 1 - alpha, 0, overlay);
 
